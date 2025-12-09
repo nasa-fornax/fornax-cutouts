@@ -1,5 +1,6 @@
 import asyncio
 import gc
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -269,12 +270,16 @@ def generate_cutout(  # noqa: C901
         temp_output_dir = f"/tmp/cutouts/{self.request.id}"
 
         try:
+            time_start = time.time()
             cutout = astrocut.FITSCutout(
                 input_files=source_file,
                 coordinates=f"{target[0]} {target[1]}",
                 cutout_size=size,
                 single_outfile=False,
             )
+            time_end = time.time()
+            print(f"Time taken to create cutout: {time_end - time_start:.2f}s")
+
         except InvalidQueryError as exc:
             # Preserve behavior for sync endpoints which expect this exception
             if job_id in ("sync", "color_preview"):
@@ -376,7 +381,7 @@ def generate_cutout(  # noqa: C901
         l_fs: AbstractFileSystem = filesystem("local")
         l_fs.rm(temp_output_dir, recursive=True)
         del cutout
-        gc.collect()
+        # gc.collect()
 
         return resp
 
