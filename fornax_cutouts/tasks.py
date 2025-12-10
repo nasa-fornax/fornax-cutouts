@@ -1,5 +1,5 @@
 import asyncio
-import gc
+import json
 import time
 from pathlib import Path
 from urllib.parse import urlparse
@@ -253,6 +253,8 @@ def generate_cutout(  # noqa: C901
         metadata,
     ):
 
+        time_task_start = time.time()
+        time_start = time_task_start
         if isinstance(size, int):
             size = (size, size)
 
@@ -267,6 +269,8 @@ def generate_cutout(  # noqa: C901
             assert isinstance(source_file, list) and len(source_file) == 1, "Cutout must have exactly one source"
 
         temp_output_dir = f"/tmp/cutouts/{self.request.id}"
+        time_end = time.time()
+        setup_time = time_end - time_start
 
         try:
             time_start = time.time()
@@ -277,7 +281,7 @@ def generate_cutout(  # noqa: C901
                 single_outfile=False,
             )
             time_end = time.time()
-            print(f"Time taken to create cutout: {time_end - time_start:.2f}s")
+            cutout_time = time_end - time_start
 
         except InvalidQueryError as exc:
             # Preserve behavior for sync endpoints which expect this exception
@@ -291,6 +295,9 @@ def generate_cutout(  # noqa: C901
             local_fs: AbstractFileSystem = filesystem("local")
             if local_fs.isdir(temp_output_dir):
                 local_fs.rm(temp_output_dir, recursive=True)
+
+            print(f"Error: {exc}")
+            print(f"Error file: {source_file}")
 
             del local_fs
             del uws_client
@@ -315,6 +322,8 @@ def generate_cutout(  # noqa: C901
 
         lpaths = []
 
+
+        time_start = time.time()
         fits_fname = ""
         if "fits" in output_format:
             fits_fname = cutout.write_as_fits(
@@ -337,6 +346,11 @@ def generate_cutout(  # noqa: C901
 
             lpaths.append(img_fname)
 
+        time_end = time.time()
+        local_write_time = time_end - time_start
+
+
+        time_start = time.time()
         fs: AbstractFileSystem
         if CUTOUT_STORAGE_IS_S3:
             fs = filesystem("s3")
@@ -358,9 +372,13 @@ def generate_cutout(  # noqa: C901
                 rpath=rpath,
             )
 
+        time_end = time.time()
+        remote_write_time = time_end - time_start
+
+
+        time_start = time.time()
         fits_url = fits_fname.replace(temp_output_dir, rpath)
         img_url = img_fname.replace(temp_output_dir, rpath)
-
         if CUTOUT_STORAGE_IS_S3:
             if fits_url:
                 fits_url = fs.sign(fits_url, expiration=ttl)
@@ -389,6 +407,18 @@ def generate_cutout(  # noqa: C901
         del cutout
         del l_fs
         del fs
+        time_end = time.time()
+        create_response_time = time_end - time_start
+        total_time = time_end - time_task_start
+
+        print(json.dumps({
+            "setup_time": setup_time,
+            "cutout_time": cutout_time,
+            "local_write_time": local_write_time,
+            "remote_write_time": remote_write_time,
+            "create_response_time": create_response_time,
+            "total_time": total_time
+        }))
 
         return resp
 
