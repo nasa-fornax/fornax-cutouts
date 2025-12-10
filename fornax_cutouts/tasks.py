@@ -252,7 +252,6 @@ def generate_cutout(  # noqa: C901
         mission,
         metadata,
     ):
-        r = redis_uws_client()
 
         if isinstance(size, int):
             size = (size, size)
@@ -285,12 +284,16 @@ def generate_cutout(  # noqa: C901
             if job_id in ("sync", "color_preview"):
                 raise exc
 
-            await r.increment_task_failures(job_id, "generate_cutout")
+            uws_client = redis_uws_client()
 
-            # Best-effort cleanup; directory may or may not exist
+            await uws_client.increment_task_failures(job_id, "generate_cutout")
+
             local_fs: AbstractFileSystem = filesystem("local")
             if local_fs.isdir(temp_output_dir):
                 local_fs.rm(temp_output_dir, recursive=True)
+
+            del local_fs
+            del uws_client
 
             return
 
@@ -344,7 +347,9 @@ def generate_cutout(  # noqa: C901
         if output_dir:
             rpath += f"{output_dir}/"
 
-        if not fs.isdir(rpath):
+        # Only create directories for local filesystem; S3 doesn't need them
+        # and the isdir/mkdir calls are expensive LIST operations
+        if not CUTOUT_STORAGE_IS_S3 and not fs.isdir(rpath):
             fs.mkdir(rpath)
 
         for lpath in lpaths:
@@ -380,8 +385,10 @@ def generate_cutout(  # noqa: C901
 
         l_fs: AbstractFileSystem = filesystem("local")
         l_fs.rm(temp_output_dir, recursive=True)
+
         del cutout
-        # gc.collect()
+        del l_fs
+        del fs
 
         return resp
 

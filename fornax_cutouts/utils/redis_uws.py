@@ -54,6 +54,10 @@ class RedisUWS:
 
         self.__redis_client = r
 
+    def __del__(self):
+        self.__redis_client.close()
+        del self.__redis_client
+
     async def _setup_index(self):
         if not CONFIG.redis.search_en:
             return
