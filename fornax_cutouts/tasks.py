@@ -414,12 +414,13 @@ def generate_cutout(  # noqa: C901
         total_time = time_end - time_task_start
 
         print(json.dumps({
-            "setup_time": setup_time,
-            "cutout_time": cutout_time,
-            "local_write_time": local_write_time,
-            "remote_write_time": remote_write_time,
-            "create_response_time": create_response_time,
-            "total_time": total_time
+            "source_file": source_file,
+            "setup_time": round(setup_time, 2),
+            "cutout_time": round(cutout_time, 2),
+            "local_write_time": round(local_write_time, 2),
+            "remote_write_time": round(remote_write_time, 2),
+            "create_response_time": round(create_response_time, 2),
+            "total_time": round(total_time, 2)
         }))
 
         return resp
