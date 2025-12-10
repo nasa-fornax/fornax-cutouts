@@ -299,6 +299,8 @@ def generate_cutout(  # noqa: C901
             print(f"Error: {exc}")
             print(f"Error file: {source_file}")
 
+            await uws_client.close()
+
             del local_fs
             del uws_client
 
