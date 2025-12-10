@@ -167,9 +167,6 @@ def write_results(self: Task, results: list[CutoutResponse | dict | None], job_i
             batch_num = await r.get_and_increment_batch_num(job_id)
             results_writer.add_results(cutout_results, batch_num=batch_num)
 
-            # Update completed counter for successful results
-            await r.increment_completed(job_id, amount=len(cutout_results))
-
         # Check if job is complete
         expected = await r.get_expected_results(job_id)
         completed = await r.get_completed_count(job_id)
@@ -289,15 +286,18 @@ def generate_cutout(  # noqa: C901
                 raise exc
 
             uws_client = redis_uws_client()
-
             await uws_client.increment_task_failures(job_id, "generate_cutout")
 
             local_fs: AbstractFileSystem = filesystem("local")
             if local_fs.isdir(temp_output_dir):
                 local_fs.rm(temp_output_dir, recursive=True)
 
-            print(f"Error: {exc}")
-            print(f"Error file: {source_file}")
+            print(f"Error: {json.dumps({
+                    'error': str(exc),
+                    'input_files': source_file,
+                    'coordinates': target,
+                    'cutout_size': size
+                })}")
 
             await uws_client.close()
 
@@ -406,6 +406,11 @@ def generate_cutout(  # noqa: C901
         l_fs: AbstractFileSystem = filesystem("local")
         l_fs.rm(temp_output_dir, recursive=True)
 
+        uws_client = redis_uws_client()
+        await uws_client.increment_completed(job_id, amount=1)
+        await uws_client.close()
+
+        del uws_client
         del cutout
         del l_fs
         del fs
