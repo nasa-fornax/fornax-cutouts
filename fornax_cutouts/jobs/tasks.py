@@ -29,8 +29,8 @@ from fornax_cutouts.sources import cutout_registry
 from fornax_cutouts.utils.exceptions import CutoutLimitExceededError, NoTasksRemainingInJobError
 from fornax_cutouts.utils.target_resolver import resolve_positions
 
-STRETCH = "asinh"  # "sinh"
-MINMAX_PERCENT: list[float] = [0.5, 99.5]
+STRETCH = "linear"  # TODO: Revert back to "asinh" after the scaling parameter is exposed in astrocut
+MINMAX_PERCENT: list[float] = [0.3, 99.7]
 
 SCHEDULE_JOB_TASK_ID_TEMPLATE = "schedule_job-{job_id}"
 BATCH_CUTOUTS_TASK_ID_TEMPLATE = "batch_cutouts-{job_id}-{batch_num}"
