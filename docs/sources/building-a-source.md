@@ -42,10 +42,10 @@ from fornax_cutouts.models.cutouts import FilenameLookupResponse, FilenameWithMe
 class MyMissionSource(AbstractMissionSource):
     metadata = MissionMetadata(
         name="my_mission",
-        pixel_size=0.5,           # arcseconds per pixel
-        max_cutout_size=2000,     # maximum cutout size in pixels
-        filter=["g", "r", "i"],   # valid filter names
-        survey=["wide"],          # valid survey names
+        pixel_size=0.5,  # arcseconds per pixel
+        max_cutout_size=2000,  # maximum cutout size in pixels
+        filter=["g", "r", "i"],  # valid filter names
+        survey=["wide"],  # valid survey names
     )
     source_file_patterns = ("*/my-bucket/data/*",)
 
@@ -99,11 +99,11 @@ class MyMissionSource(AbstractMissionSource):
 
 ```python
 MissionMetadata(
-    name="my_mission",       # must match the register_source() key
-    pixel_size=0.5,          # arcseconds per pixel (used for coordinate math)
-    max_cutout_size=2000,    # requests larger than this are rejected with 422
+    name="my_mission",  # must match the register_source() key
+    pixel_size=0.5,  # arcseconds per pixel (used for coordinate math)
+    max_cutout_size=2000,  # requests larger than this are rejected with 422
     filter=["g", "r", "i"],  # valid values for the filter parameter
-    survey=["wide"],         # valid values for the survey parameter
+    survey=["wide"],  # valid values for the survey parameter
 )
 ```
 
@@ -117,7 +117,7 @@ MissionMetadata(
     filter=["g", "r", "i"],
     survey=["wide"],
     # Mission-specific extras
-    stack_files=["data", "wt", "mask"]
+    stack_files=["data", "wt", "mask"],
 )
 ```
 
@@ -188,10 +188,12 @@ class MyMissionSource(AbstractMissionSource):
                 FilenameLookupResponse(
                     mission="my_mission",
                     target=(ra, dec),
-                    filenames=[FilenameWithMetadata(
-                        filename=path,
-                        metadata={"filter": filt},
-                    )],
+                    filenames=[
+                        FilenameWithMetadata(
+                            filename=path,
+                            metadata={"filter": filt},
+                        )
+                    ],
                 )
             )
 

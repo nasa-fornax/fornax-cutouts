@@ -63,7 +63,7 @@ dev = [
     "isort>=7.0.0",
     "pre-commit>=4.3.0",
     "pyarrow-stubs>=20.0.0.20250928",
-    "ruff>=0.14.1",
+    "ruff>=0.17.4",
 ]
 test = [
     "fakeredis[json]>=2.37.1",
