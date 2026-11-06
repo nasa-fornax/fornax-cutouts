@@ -94,7 +94,7 @@ class ApiKeyAuthProvider(AbstractAuthProvider):
 
 ```python
 Principal(identity="trusted-partner", cutout_limit=50_000)  # raise the limit
-Principal(identity="internal", cutout_limit=None)            # remove the limit entirely
+Principal(identity="internal", cutout_limit=None)  # remove the limit entirely
 ```
 
 Optionally override the rolling window per identity too:

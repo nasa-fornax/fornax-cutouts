@@ -173,8 +173,7 @@ from fornax_cutouts.auth import AbstractAuthProvider, Principal
 class MyAuthProvider(AbstractAuthProvider):
     name = "my_auth"
 
-    async def resolve(self, request: Request) -> Principal | None:
-        ...
+    async def resolve(self, request: Request) -> Principal | None: ...
 ```
 
 Return `None` when the provider doesn't recognize the request (e.g. no auth header present) — this lets the registry fall back to the anonymous default rather than treating the request as an error.

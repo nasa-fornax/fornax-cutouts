@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Generator
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from redis import Redis as SyncRedisClient
@@ -204,7 +204,7 @@ def setup_index(redis_client: SyncRedisClient | SyncRedisCluster):
 
     except ResponseError as e:
         if "Index already exists" not in str(e):
-            raise e
+            raise
 
 
 def json_dumps_with_encoders(obj: Any) -> str:
@@ -349,7 +349,7 @@ class AsyncRedisCutoutJob:
             UTCTimestamp: The time that was written.
         """
         if time is None:
-            time = UTCTimestamp.now(timezone.utc)
+            time = UTCTimestamp.now(UTC)
 
         await self.__update_uws(path=f"$.{time_field}", obj=time.timestamp())
 
@@ -391,7 +391,7 @@ class AsyncRedisCutoutJob:
     async def create_job(
         self,
         run_id: str | None = None,
-        parameters: dict = {},
+        parameters: dict | None = None,
         identity: str = _UNKNOWN_CLIENT_BUCKET,
         cutout_limit: int | None = None,
         window_seconds: int | None = None,
@@ -612,7 +612,7 @@ class SyncRedisCutoutJob:
                 if creation and creation[0] is not None:
                     self.__destruction_ts = float(creation[0]) + CONFIG.async_ttl
                 else:
-                    self.__destruction_ts = UTCTimestamp.now(timezone.utc).timestamp() + CONFIG.async_ttl
+                    self.__destruction_ts = UTCTimestamp.now(UTC).timestamp() + CONFIG.async_ttl
         return self.__destruction_ts
 
     def __expire(self, pipe, *keys: str) -> None:
@@ -650,7 +650,7 @@ class SyncRedisCutoutJob:
             time (UTCTimestamp, optional): Time to store. Defaults to ``UTCTimestamp.now(timezone.utc)``.
         """
         if time is None:
-            time = UTCTimestamp.now(timezone.utc)
+            time = UTCTimestamp.now(UTC)
 
         self.__update_uws(path=f"$.{time_field}", obj=time.timestamp())
 

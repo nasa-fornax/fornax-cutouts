@@ -91,13 +91,14 @@ from fornax_cutouts.sources.base import AbstractMissionSource, MissionMetadata
 from fornax_cutouts.models.cutouts import FilenameLookupResponse
 from fornax_cutouts.models.base import Positions, TargetPosition
 
+
 class MySource(AbstractMissionSource):
     metadata = MissionMetadata(
         name="my_mission",
-        pixel_size=0.25,          # arcseconds per pixel
-        max_cutout_size=3000,     # maximum allowed size in pixels
-        filter=["g", "r", "i"],   # valid filter values
-        survey=["main"],          # valid survey values
+        pixel_size=0.25,  # arcseconds per pixel
+        max_cutout_size=3000,  # maximum allowed size in pixels
+        filter=["g", "r", "i"],  # valid filter values
+        survey=["main"],  # valid survey values
     )
 
     def get_filenames(
@@ -105,8 +106,7 @@ class MySource(AbstractMissionSource):
         position: TargetPosition | Positions,
         filter: str | list[str] = ["g", "r", "i"],
         **kwargs,
-    ) -> list[FilenameLookupResponse]:
-        ...
+    ) -> list[FilenameLookupResponse]: ...
 ```
 
 ### MissionMetadata Fields
@@ -151,8 +151,8 @@ FilenameLookupResponse(
             "survey": "main",
             "ra": 83.8221,
             "dec": -5.3911,
-        }
-    )
+        },
+    ),
 )
 ```
 
