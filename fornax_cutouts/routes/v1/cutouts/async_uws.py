@@ -21,7 +21,6 @@ from fornax_cutouts.jobs.redis import AsyncRedisCutoutJob, async_get_uws_jobs, a
 from fornax_cutouts.jobs.results import render_cutout_results
 from fornax_cutouts.jobs.tasks import enqueue_task, schedule_job
 from fornax_cutouts.models.metadata import MultiMissionCutoutRequest
-from fornax_cutouts.utils.exceptions import CutoutLimitExceededError
 from fornax_cutouts.utils.form_data import _filename_params, form_parser
 from fornax_cutouts.utils.html_link import html_link
 from fornax_cutouts.utils.logging import get_logger
@@ -148,16 +147,10 @@ class CutoutsUWSHandler:
         limiter = CutoutLimiter(self.redis_client)
 
         owner_id = _owner_id_from_principal(principal)
+        anon_limit_hit_info = auth_registry.anon_limit_hit_info() if principal.is_anonymous else ""
 
         # Reserve the minimum number of cutouts required by the request (positions)
-        try:
-            await limiter.reserve(principal, job_id, len(position))
-        except CutoutLimitExceededError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=str(exc),
-                headers={"Retry-After": str(exc.retry_after)},
-            )
+        await limiter.reserve(principal, job_id, len(position), anon_limit_hit_info=anon_limit_hit_info)
 
         self.logger.info(
             "Creating UWS job",

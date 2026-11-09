@@ -19,6 +19,7 @@ class AbstractAuthProvider(ABC):
     """
 
     name: str
+    anon_limit_hit_info: str = ""
 
     @property
     def logger(self) -> logging.Logger:
