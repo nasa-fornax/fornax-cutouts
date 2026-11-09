@@ -51,6 +51,13 @@ class CsvResponse(Response):
     media_type = "text/csv"
 
 
+def _owner_id_from_principal(principal: Principal | None) -> str | None:
+    """UWS owner id is the authenticated identity; anonymous principals own nothing."""
+    if principal is None or principal.is_anonymous:
+        return None
+    return principal.identity
+
+
 @cbv(uws_router)
 class CutoutsUWSHandler:
     redis_client: Redis | RedisCluster = Depends(async_redis_client_factory)
@@ -76,11 +83,14 @@ class CutoutsUWSHandler:
             int | None,
             Query(description="Return the given number of most recently created jobs.", gt=0),
         ] = None,
+        principal: Annotated[Principal | None, Depends(auth_registry.resolve_principal)] = None,
     ) -> Jobs:
         """
         Returns Jobs list per UWS spec
         https://www.ivoa.net/documents/UWS/20161024/REC-UWS-1.1-20161024.html#RESTbinding
         """
+        owner_id = _owner_id_from_principal(principal)
+
         if last is None:
             # If the user isn't limiting the number of jobs, we'll do it for them
             query_params = dict(request.query_params)
@@ -94,7 +104,13 @@ class CutoutsUWSHandler:
                 execution_phase for execution_phase in ExecutionPhase if execution_phase != ExecutionPhase.ARCHIVED
             ]
 
-        jobs = await async_get_uws_jobs(redis_client=self.redis_client, phases=phases, after=after, last=last)
+        jobs = await async_get_uws_jobs(
+            redis_client=self.redis_client,
+            phases=phases,
+            after=after,
+            last=last,
+            owner_id=owner_id,
+        )
         return XmlResponse(jobs.to_xml())
 
     @uws_router.post(
@@ -131,6 +147,8 @@ class CutoutsUWSHandler:
         uws_job = AsyncRedisCutoutJob(redis_client=self.redis_client, job_id=job_id)
         limiter = CutoutLimiter(self.redis_client)
 
+        owner_id = _owner_id_from_principal(principal)
+
         # Reserve the minimum number of cutouts required by the request (positions)
         try:
             await limiter.reserve(principal, job_id, len(position))
@@ -157,6 +175,7 @@ class CutoutsUWSHandler:
             await uws_job.create_job(
                 run_id=run_id,
                 parameters=request_params,
+                owner_id=owner_id,
                 identity=principal.identity,
                 cutout_limit=principal.cutout_limit if CONFIG.cutout_limit.enabled else None,
                 window_seconds=principal.window_seconds,
@@ -186,9 +205,12 @@ class CutoutsUWSHandler:
             str,
             Path(description="Server-assigned job ID for the request"),
         ],
+        principal: Annotated[Principal, Depends(auth_registry.resolve_principal)],
     ) -> JobSummary:
+        owner_id = _owner_id_from_principal(principal)
+
         uws_job = AsyncRedisCutoutJob(redis_client=self.redis_client, job_id=job_id)
-        job_summary = await uws_job.get_job_summary(base_url=request.url)
+        job_summary = await uws_job.get_job_summary(base_url=request.url, owner_id=owner_id)
         return XmlResponse(job_summary.to_xml())
 
     @uws_router.delete(
@@ -202,6 +224,7 @@ class CutoutsUWSHandler:
             str,
             Path(description="Server-assigned job ID for the request"),
         ],
+        principal: Annotated[Principal, Depends(auth_registry.resolve_principal)],
     ):
         """
         Deletes specific Job info per UWS spec. Cancels if running. Note the /jobs path for TAP is just /async
@@ -224,13 +247,16 @@ class CutoutsUWSHandler:
             str,
             Path(description="Server-assigned job ID for the request"),
         ],
+        principal: Annotated[Principal, Depends(auth_registry.resolve_principal)],
     ):
         """
         Return job details per UWS spec
         https://www.ivoa.net/documents/UWS/20161024/REC-UWS-1.1-20161024.html#RESTbinding
         """
+        owner_id = _owner_id_from_principal(principal)
+
         uws_job = AsyncRedisCutoutJob(redis_client=self.redis_client, job_id=job_id)
-        job_summary = await uws_job.get_job_summary()
+        job_summary = await uws_job.get_job_summary(owner_id=owner_id)
         return job_summary.phase
 
     @uws_router.post(
@@ -244,6 +270,7 @@ class CutoutsUWSHandler:
             str,
             Path(description="Server-assigned job ID for the request"),
         ],
+        principal: Annotated[Principal, Depends(auth_registry.resolve_principal)],
         phase: Annotated[
             PhaseAction,
             Form(alias="PHASE", description="Execution Phase"),
@@ -266,14 +293,17 @@ class CutoutsUWSHandler:
             str,
             Path(description="Server-assigned job ID for the request"),
         ],
+        principal: Annotated[Principal, Depends(auth_registry.resolve_principal)],
     ):
         """
         Execution Duration not estimated, returns 0.
         Return job details per UWS spec
         https://www.ivoa.net/documents/UWS/20161024/REC-UWS-1.1-20161024.html#RESTbinding
         """
+        owner_id = _owner_id_from_principal(principal)
+
         uws_job = AsyncRedisCutoutJob(redis_client=self.redis_client, job_id=job_id)
-        job_summary = await uws_job.get_job_summary()
+        job_summary = await uws_job.get_job_summary(owner_id=owner_id)
         return job_summary.execution_duration
 
     @uws_router.get(
@@ -287,13 +317,16 @@ class CutoutsUWSHandler:
             str,
             Path(description="Server-assigned job ID for the request"),
         ],
+        principal: Annotated[Principal, Depends(auth_registry.resolve_principal)],
     ):
         """
         Return job details per UWS spec
         https://www.ivoa.net/documents/UWS/20161024/REC-UWS-1.1-20161024.html#RESTbinding
         """
+        owner_id = _owner_id_from_principal(principal)
+
         uws_job = AsyncRedisCutoutJob(redis_client=self.redis_client, job_id=job_id)
-        job_summary = await uws_job.get_job_summary()
+        job_summary = await uws_job.get_job_summary(owner_id=owner_id)
         return job_summary.destruction
 
     @uws_router.post(
@@ -307,6 +340,7 @@ class CutoutsUWSHandler:
             str,
             Path(description="Server-assigned job ID for the request"),
         ],
+        principal: Annotated[Principal, Depends(auth_registry.resolve_principal)],
         destruction: Annotated[
             UTCTimestamp | None,
             Form(alias="DESTRUCTION", description="ISO 8601 UTC datetime for proposed job destruction"),
@@ -332,14 +366,17 @@ class CutoutsUWSHandler:
             str,
             Path(description="Server-assigned job ID for the request"),
         ],
+        principal: Annotated[Principal, Depends(auth_registry.resolve_principal)],
     ):
         """
         Return job details per UWS spec
         https://www.ivoa.net/documents/UWS/20161024/REC-UWS-1.1-20161024.html#RESTbinding
         In case of a valid job with no errors, an empty 200 OK response is returned.
         """
+        owner_id = _owner_id_from_principal(principal)
+
         uws_job = AsyncRedisCutoutJob(redis_client=self.redis_client, job_id=job_id)
-        job_summary = await uws_job.get_job_summary()
+        job_summary = await uws_job.get_job_summary(owner_id=owner_id)
         return job_summary.error_summary
 
     @uws_router.get(
@@ -353,14 +390,17 @@ class CutoutsUWSHandler:
             str,
             Path(description="Server-assigned job ID for the request"),
         ],
+        principal: Annotated[Principal, Depends(auth_registry.resolve_principal)],
     ):
         """
         Execution Time quotes not provided, returns empty string.
         Return job details per UWS spec
         https://www.ivoa.net/documents/UWS/20161024/REC-UWS-1.1-20161024.html#RESTbinding
         """
+        owner_id = _owner_id_from_principal(principal)
+
         uws_job = AsyncRedisCutoutJob(redis_client=self.redis_client, job_id=job_id)
-        job_summary = await uws_job.get_job_summary()
+        job_summary = await uws_job.get_job_summary(owner_id=owner_id)
         return job_summary.quote if job_summary.quote is not None else ""
 
     @uws_router.get(
@@ -374,13 +414,16 @@ class CutoutsUWSHandler:
             str,
             Path(description="Server-assigned job ID for the request"),
         ],
+        principal: Annotated[Principal, Depends(auth_registry.resolve_principal)],
     ):
         """
         Return job details per UWS spec
         https://www.ivoa.net/documents/UWS/20161024/REC-UWS-1.1-20161024.html#RESTbinding
         """
+        owner_id = _owner_id_from_principal(principal)
+
         uws_job = AsyncRedisCutoutJob(redis_client=self.redis_client, job_id=job_id)
-        await uws_job.ensure_exists()
+        await uws_job.ensure_exists(owner_id=owner_id)
         results = Results(
             results=[
                 ResultReference(
@@ -417,12 +460,15 @@ class CutoutsUWSHandler:
             str,
             Path(description="Server-assigned job ID for the request"),
         ],
+        principal: Annotated[Principal, Depends(auth_registry.resolve_principal)],
     ):
         """
         Return job summary results in a JSON format
         """
+        owner_id = _owner_id_from_principal(principal)
+
         uws_job = AsyncRedisCutoutJob(redis_client=self.redis_client, job_id=job_id)
-        job_summary = await uws_job.get_job_result_status()
+        job_summary = await uws_job.get_job_result_status(owner_id=owner_id)
 
         return job_summary
 
@@ -438,6 +484,7 @@ class CutoutsUWSHandler:
             str,
             Path(description="Server-assigned job ID for the request"),
         ],
+        principal: Annotated[Principal, Depends(auth_registry.resolve_principal)],
         output_format: Annotated[
             str,
             Query(description="Output format to return", choices=["json", "csv", "votable", "xml"]),
@@ -460,8 +507,10 @@ class CutoutsUWSHandler:
                 detail=f"Invalid output format: {output_format}",
             )
 
+        owner_id = _owner_id_from_principal(principal)
+
         uws_job = AsyncRedisCutoutJob(redis_client=self.redis_client, job_id=job_id)
-        await uws_job.ensure_exists()
+        await uws_job.ensure_exists(owner_id=owner_id)
 
         # render_cutout_results does sync DuckDB/S3 parquet reads, pandas, and VOTable XML
         payload = await asyncio.to_thread(render_cutout_results, job_id, output_format, page, limit, str(request.url))
@@ -483,13 +532,18 @@ class CutoutsUWSHandler:
             str,
             Path(description="Server-assigned job ID for the request"),
         ],
+        principal: Annotated[Principal, Depends(auth_registry.resolve_principal)],
     ) -> Parameters:
         """
         Return job details per UWS spec
         https://www.ivoa.net/documents/UWS/20161024/REC-UWS-1.1-20161024.html#RESTbinding
         """
+        owner_id = _owner_id_from_principal(principal)
+
         uws_job = AsyncRedisCutoutJob(redis_client=self.redis_client, job_id=job_id)
-        job_parameters = await uws_job.get_job_parameters(position_base_url=f"{request.url}/position")
+        job_parameters = await uws_job.get_job_parameters(
+            position_base_url=f"{request.url}/position", owner_id=owner_id
+        )
         return XmlResponse(job_parameters.to_xml())
 
     @uws_router.get(
@@ -504,6 +558,7 @@ class CutoutsUWSHandler:
             str,
             Path(description="Server-assigned job ID for the request"),
         ],
+        principal: Annotated[Principal, Depends(auth_registry.resolve_principal)],
         page: Annotated[
             int,
             Query(description="Page number to return", ge=0),
@@ -516,8 +571,15 @@ class CutoutsUWSHandler:
         """
         Return job positions in a JSON format
         """
+        owner_id = _owner_id_from_principal(principal)
+
         uws_job = AsyncRedisCutoutJob(redis_client=self.redis_client, job_id=job_id)
-        job_positions = await uws_job.get_job_positions(page=page, limit=limit, base_url=request.url)
+        job_positions = await uws_job.get_job_positions(
+            page=page,
+            limit=limit,
+            base_url=str(request.url),
+            owner_id=owner_id,
+        )
         return job_positions
 
     @uws_router.post(
@@ -531,6 +593,7 @@ class CutoutsUWSHandler:
             str,
             Path(description="Server-assigned job ID for the request"),
         ],
+        principal: Annotated[Principal, Depends(auth_registry.resolve_principal)],
         runid: Annotated[
             str | None,
             Form(description="Run ID to be used", alias="RUNID"),
@@ -552,11 +615,14 @@ class CutoutsUWSHandler:
             str,
             Path(description="Server-assigned job ID for the request"),
         ],
-    ):
+        principal: Annotated[Principal, Depends(auth_registry.resolve_principal)],
+    ) -> str:
         """
         Return job details per UWS spec
         https://www.ivoa.net/documents/UWS/20161024/REC-UWS-1.1-20161024.html#RESTbinding
         """
+        owner_id = _owner_id_from_principal(principal)
+
         uws_job = AsyncRedisCutoutJob(redis_client=self.redis_client, job_id=job_id)
-        job_summary = await uws_job.get_job_summary()
-        return job_summary.owner_id
+        job_summary = await uws_job.get_job_summary(owner_id=owner_id)
+        return job_summary.owner_id if job_summary.owner_id is not None else ""
