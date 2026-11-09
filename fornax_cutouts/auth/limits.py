@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from importlib.resources import files
-from typing import Any, Callable
+from typing import Any
 
 from redis import Redis as SyncRedisClient
 from redis import RedisCluster as SyncRedisCluster

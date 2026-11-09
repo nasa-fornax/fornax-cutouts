@@ -23,7 +23,7 @@ def resolve_positions(position: list[str]) -> tuple[Positions, set[str]]:
             new_item = TargetPosition(*[float(i) for i in item.split(delimiter)])
             resolved_positions.append(new_item)
 
-        except Exception:
+        except (ValueError, TypeError):
             unresolved_objects.add(item)
 
     return resolved_positions, unresolved_objects

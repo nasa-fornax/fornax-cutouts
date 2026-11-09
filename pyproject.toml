@@ -38,11 +38,10 @@ dependencies = [
     "click>=8.3.0",
     "fastapi[standard-no-fastapi-cloud-cli]>=0.115.0",
     "fastapi-utils>=0.8.0",
-    "httpx>=0.28.1",
     "pydantic>=2.6,<3",
     "pydantic-settings>=2.11.0",
     "redis>=6.2",
-    "typing-inspect>=0.9.0",
+    "typing-inspect>=0.9.0",                           # required by fastapi-utils
     "uvicorn[standard]>=0.37.0",
     "vo-models>=0.5.0",
     "duckdb>=1.4.1",
@@ -60,10 +59,9 @@ Changelog = "https://github.com/nasa-fornax/fornax-cutouts/blob/main/CHANGELOG.m
 [dependency-groups]
 dev = [
     { include-group = "test" },
-    "isort>=7.0.0",
     "pre-commit>=4.3.0",
     "pyarrow-stubs>=20.0.0.20250928",
-    "ruff>=0.14.1",
+    "ruff>=0.17.4",
 ]
 test = [
     "fakeredis[json]>=2.37.1",

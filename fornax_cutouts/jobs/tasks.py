@@ -3,11 +3,11 @@ import gc
 import time
 from abc import abstractmethod
 from collections import defaultdict
-from collections.abc import Callable
-from datetime import timedelta, timezone
+from collections.abc import Callable, Sequence
+from datetime import UTC, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any, Sequence, cast
+from typing import Any, cast
 from urllib.parse import urlparse
 
 import astrocut
@@ -280,7 +280,7 @@ def batch_cutouts(self: Task, job_id: str, batch_num: int):
 
     prepare_batch_time = time.perf_counter()
 
-    eta = UTCTimestamp.now(timezone.utc) + timedelta(minutes=CONFIG.worker.batch_watchdog_timeout_minutes)
+    eta = UTCTimestamp.now(UTC) + timedelta(minutes=CONFIG.worker.batch_watchdog_timeout_minutes)
     batch_watchdog.apply_async(
         kwargs={
             "job_id": job_id,
@@ -564,7 +564,6 @@ class CutoutHandler:
         Returns:
             str: Filename of the generated cutout.
         """
-        pass
 
     @abstractmethod
     def make_preview(
@@ -584,7 +583,6 @@ class CutoutHandler:
         Returns:
             str: Filename of the generated preview image.
         """
-        pass
 
 
 class FITSCutoutHandler(CutoutHandler):
@@ -731,7 +729,7 @@ def generate_cutout(  # noqa: C901
     generate_science: bool = True,
     generate_preview: bool = False,
     mission: str = "sync_cutout",
-    metadata: dict = {},
+    metadata: dict | None = None,
     job_id: str = "",
     is_async: bool = True,
 ) -> CutoutResponse:
@@ -750,12 +748,13 @@ def generate_cutout(  # noqa: C901
         mission (str, optional): The mission name (e.g., "ps1").
             Defaults to "sync_cutout".
         metadata (dict, optional): Mission-specific metadata dictionary.
-            Defaults to {}.
+            Defaults to None.
         job_id (str, optional): The job ID to generate the cutout for.
             Defaults to "".
         is_async (bool, optional): Whether the cutout is being generated asynchronously, this is for logging purposes.
             Defaults to True.
     """
+    metadata = metadata or {}
     mission = _resolve_mission(source_file, mission)
     start_time = time.perf_counter()
 
@@ -1037,7 +1036,7 @@ def execute_cutout(  # noqa: C901
     generate_preview: bool = False,
     output_dir: str = "",
     mission: str = "",
-    metadata: dict = {},
+    metadata: dict | None = None,
     batch_num: int = 0,
     increment_id: int = 0,
 ) -> CutoutResponse | None:
@@ -1062,6 +1061,7 @@ def execute_cutout(  # noqa: C901
         batch_num (int): Async batch identifier; 0 for non-batched (e.g. sync) tasks.
         increment_id (int): Index within the batch for Redis aggregation.
     """
+    metadata = metadata or {}
     is_async = batch_num > 0
     mission = _resolve_mission(source_file, mission)
     if isinstance(target, list):
@@ -1114,7 +1114,7 @@ def execute_cutout(  # noqa: C901
             },
         )
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001, record any failure
         if is_async:
             remaining = r.fail_task(
                 batch_num=batch_num,
