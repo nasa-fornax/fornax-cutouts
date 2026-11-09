@@ -704,6 +704,18 @@ class SyncRedisCutoutJob:
             return ExecutionPhase(phase[0])
         return ExecutionPhase.UNKNOWN
 
+    def get_job_owner_id(self) -> str | None:
+        """
+        Return the owner ID for this job.
+
+        Returns:
+            str | None: Owner ID.
+        """
+        owner_id = self.__redis_client.json().get(self.__keys.uws, "$.owner_id")
+        if owner_id and owner_id[0]:
+            return owner_id[0]
+        return None
+
     def get_cutout_limit_budget(self) -> tuple[str | None, int | None, int | None]:
         """
         Return the cutout-limit snapshot recorded at job creation.
