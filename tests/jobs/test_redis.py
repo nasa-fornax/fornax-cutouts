@@ -13,6 +13,7 @@ from fornax_cutouts.jobs.redis import (
     RedisKeys,
     SyncRedisCutoutJob,
     _build_uws_jobs_search_query,
+    _filter_uws_jobs_by_owner_id,
     _filter_uws_jobs_by_phase,
 )
 from tests.jobs.helpers import descriptor
@@ -58,6 +59,26 @@ class TestUWSJobPhaseFiltering:
         ]
         filtered = _filter_uws_jobs_by_phase(jobs, [])
         assert [job["job_id"] for job in filtered] == ["a"]
+
+
+class TestUWSJobOwnerFiltering:
+    def test_anonymous_sees_unowned_jobs_only(self):
+        jobs = [
+            {"job_id": "anon-a"},
+            {"job_id": "anon-b", "owner_id": None},
+            {"job_id": "owned", "owner_id": "owner-a"},
+        ]
+        filtered = _filter_uws_jobs_by_owner_id(jobs, None)
+        assert [job["job_id"] for job in filtered] == ["anon-a", "anon-b"]
+
+    def test_owner_sees_only_their_jobs(self):
+        jobs = [
+            {"job_id": "anon"},
+            {"job_id": "owned-a", "owner_id": "owner-a"},
+            {"job_id": "owned-b", "owner_id": "owner-b"},
+        ]
+        filtered = _filter_uws_jobs_by_owner_id(jobs, "owner-a")
+        assert [job["job_id"] for job in filtered] == ["owned-a"]
 
 
 class TestAsyncJobTTL:

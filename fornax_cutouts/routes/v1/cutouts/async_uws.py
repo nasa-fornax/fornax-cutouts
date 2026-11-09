@@ -616,7 +616,7 @@ class CutoutsUWSHandler:
             Path(description="Server-assigned job ID for the request"),
         ],
         principal: Annotated[Principal, Depends(auth_registry.resolve_principal)],
-    ) -> str:
+    ) -> str | None:
         """
         Return job details per UWS spec
         https://www.ivoa.net/documents/UWS/20161024/REC-UWS-1.1-20161024.html#RESTbinding
@@ -625,4 +625,4 @@ class CutoutsUWSHandler:
 
         uws_job = AsyncRedisCutoutJob(redis_client=self.redis_client, job_id=job_id)
         job_summary = await uws_job.get_job_summary(owner_id=owner_id)
-        return job_summary.owner_id if job_summary.owner_id is not None else ""
+        return job_summary.owner_id
