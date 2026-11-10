@@ -3,7 +3,8 @@ from contextlib import asynccontextmanager
 from datetime import UTC
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, Request, Response, status
+from fastapi import Depends, FastAPI, Request, status
+from fastapi.responses import JSONResponse
 from redis.asyncio import Redis, RedisCluster
 from redis.exceptions import ConnectionError as RedisConnectionError
 from vo_models.voresource.types import UTCTimestamp
@@ -54,15 +55,18 @@ main_app.include_router(api_v1, prefix="/api/v0")  # Beta routes, eventually wil
 
 
 @main_app.exception_handler(CutoutJobNotFoundError)
-async def cutout_job_not_found_handler(_request: Request, exc: CutoutJobNotFoundError) -> Response:
-    return Response(status_code=status.HTTP_404_NOT_FOUND, content=str(exc))
+async def cutout_job_not_found_handler(_request: Request, exc: CutoutJobNotFoundError) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={"detail": str(exc)},
+    )
 
 
 @main_app.exception_handler(CutoutLimitExceededError)
-async def cutout_limit_exceeded_handler(_request: Request, exc: CutoutLimitExceededError) -> Response:
-    return Response(
+async def cutout_limit_exceeded_handler(_request: Request, exc: CutoutLimitExceededError) -> JSONResponse:
+    return JSONResponse(
         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-        content=str(exc),
+        content={"detail": str(exc)},
         headers={"Retry-After": str(exc.retry_after)},
     )
 

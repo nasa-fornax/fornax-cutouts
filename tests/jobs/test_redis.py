@@ -118,6 +118,22 @@ class TestSyncRedisCutoutJobLifecycle:
         assert sync_redis.json().get(RedisKeys(job_id).uws, "$.start_time")[0] == start_time
 
 
+class TestSyncRedisCutoutJobOwner:
+    def test_get_job_owner_id_returns_stored_owner(self, sync_redis, job_id):
+        sync_redis.json().set(RedisKeys(job_id).uws, "$.owner_id", "owner-a")
+        job = SyncRedisCutoutJob(redis_client=sync_redis, job_id=job_id)
+        assert job.get_job_owner_id() == "owner-a"
+
+    def test_get_job_owner_id_returns_none_when_unset(self, sync_redis, job_id):
+        job = SyncRedisCutoutJob(redis_client=sync_redis, job_id=job_id)
+        assert job.get_job_owner_id() is None
+
+    def test_get_job_owner_id_returns_none_when_null(self, sync_redis, job_id):
+        sync_redis.json().set(RedisKeys(job_id).uws, "$.owner_id", None)
+        job = SyncRedisCutoutJob(redis_client=sync_redis, job_id=job_id)
+        assert job.get_job_owner_id() is None
+
+
 class TestSyncRedisCutoutJobTTL:
     def test_set_total_task_count_preserves_ttl(self, sync_redis, job_id):
         job = SyncRedisCutoutJob(redis_client=sync_redis, job_id=job_id)
