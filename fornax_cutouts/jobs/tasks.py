@@ -325,6 +325,7 @@ def batch_cutouts(self: Task, job_id: str, batch_num: int):
                 "metadata": desc.get("metadata"),
                 "batch_num": batch_num,
                 "increment_id": increment_id,
+                "owner_id": owner_id,
             },
             task_id=EXECUTE_CUTOUT_TASK_ID_TEMPLATE.format(
                 job_id=job_id, batch_num=batch_num, increment_id=increment_id
@@ -1069,6 +1070,7 @@ def execute_cutout(  # noqa: C901
     metadata: dict | None = None,
     batch_num: int = 0,
     increment_id: int = 0,
+    owner_id: str | None = None,
 ) -> CutoutResponse | None:
     """
     Generate a cutout within the specific source file
@@ -1090,6 +1092,7 @@ def execute_cutout(  # noqa: C901
             Defaults to None.
         batch_num (int): Async batch identifier; 0 for non-batched (e.g. sync) tasks.
         increment_id (int): Index within the batch for Redis aggregation.
+        owner_id (str | None): Job owner resolved once per batch. Anonymous jobs pass None.
     """
     metadata = metadata or {}
     is_async = batch_num > 0
@@ -1102,12 +1105,10 @@ def execute_cutout(  # noqa: C901
     resp = None
     r: SyncRedisCutoutJob | None = None
     remaining = None
-    owner_id: str | None = None
 
     if is_async:
         r = SyncRedisCutoutJob(redis_client=redis_client_factory(), job_id=job_id)
         r.start_task(batch_num, increment_id)
-        owner_id = r.get_job_owner_id()
 
     try:
         resp = generate_cutout(
