@@ -93,7 +93,7 @@ def schedule_job(
     limiter = CutoutLimiter(redis_client_factory())
     cutout_limit_identity, cutout_limit_max, cutout_limit_window_seconds = r.get_cutout_limit_budget()
     owner_id = r.get_job_owner_id()
-    anon_limit_hit_info = auth_registry.anon_limit_hit_info() if owner_id is None else ""
+    limit_hit_info = auth_registry.limit_hit_info(is_anonymous=owner_id is None)
     logger.debug(
         f"Cutout limit identity: {owner_id if owner_id else 'anonymous'} ({cutout_limit_identity}) "
         f"limit: {cutout_limit_max}",
@@ -180,7 +180,7 @@ def schedule_job(
             actual=0,
             cutout_limit=cutout_limit_max,
             window_seconds=cutout_limit_window_seconds,
-            anon_limit_hit_info=anon_limit_hit_info,
+            limit_hit_info=limit_hit_info,
         )
         r.start_job()
         r.complete_job()
@@ -207,7 +207,7 @@ def schedule_job(
             actual=total_jobs,
             cutout_limit=cutout_limit_max,
             window_seconds=cutout_limit_window_seconds,
-            anon_limit_hit_info=anon_limit_hit_info,
+            limit_hit_info=limit_hit_info,
         )
     except CutoutLimitExceededError as exc:
         r.fail_job(str(exc), ErrorType.TRANSIENT)

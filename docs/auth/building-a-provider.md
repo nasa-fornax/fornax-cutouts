@@ -63,6 +63,7 @@ from fornax_cutouts.auth import AbstractAuthProvider, Principal, auth_registry
 class ApiKeyAuthProvider(AbstractAuthProvider):
     name = "api_key"
     anon_limit_hit_info = "Send an X-API-Key header to raise this limit."
+    authenticated_limit_hit_info = "Retry after the window resets, or contact support if you need a higher limit."
 
     # Replace with a real lookup (database, cache, secrets manager, etc.)
     _KNOWN_KEYS = {
@@ -86,7 +87,7 @@ class ApiKeyAuthProvider(AbstractAuthProvider):
 - Raise `PrincipalResolutionError` when the request is clearly for your provider but resolution fails (backend down, misconfiguration). The registry logs and falls back to the anonymous limit. Do not use this for "wrong password" style cases where anonymous fallback is acceptable — return `None` instead.
 - Any other exception is not caught and will surface as HTTP 500.
 - `identity` should be a stable, opaque string — a hashed user ID or API key ID, not raw PII.
-- `anon_limit_hit_info` is included only when an anonymous principal hits the limit. Set it to a short note on how to authenticate. Leave it unset (or `""`) to omit the extra line. See [Auth Providers Overview](overview.md#abstractauthprovider).
+- `anon_limit_hit_info` is included when an anonymous principal hits the limit. Set it to a short note on how to authenticate. `authenticated_limit_hit_info` is included when an authenticated principal hits the limit. Leave either unset (or `""`) to omit that extra line. See [Auth Providers Overview](overview.md#abstractauthprovider).
 
 ---
 
@@ -190,14 +191,14 @@ curl -i -X POST http://localhost:8000/api/v0/cutouts/async \
   -F "size=500"
 ```
 
-Once an identity's budget is exhausted within the window, subsequent requests receive `429 Too Many Requests` with a `Retry-After` header. The body is the limit message. For anonymous callers it also includes your `anon_limit_hit_info` on the next line, when that string is non-empty:
+Once an identity's budget is exhausted within the window, subsequent requests receive `429 Too Many Requests` with a `Retry-After` header. The body is the limit message. It also includes `anon_limit_hit_info` or `authenticated_limit_hit_info` on the next line, when that string is non-empty:
 
 ```text
 Cutout limit exceeded: 10 used + at least 1 requested > 10 limit (retry after 42s)
 Send an X-API-Key header to raise this limit.
 ```
 
-If a job passes the initial reservation but the worker discovers more cutouts than expected (e.g. multiple filters per position), reconcile may fail the job with `ExecutionPhase.ERROR` instead. The client should check `GET /cutouts/async/{job_id}/error` and retry after the window rolls. That error summary is the same message, including `anon_limit_hit_info` for anonymous jobs.
+If a job passes the initial reservation but the worker discovers more cutouts than expected (e.g. multiple filters per position), reconcile may fail the job with `ExecutionPhase.ERROR` instead. The client should check `GET /cutouts/async/{job_id}/error` and retry after the window rolls. That error summary is the same message, including `anon_limit_hit_info` or `authenticated_limit_hit_info`.
 
 ---
 
@@ -224,4 +225,5 @@ uv run pytest tests/auth/ -v
 - [ ] `identity` is a stable, opaque string (no raw PII)
 - [ ] `cutout_limit` reflects the intended budget (`None` for unlimited)
 - [ ] `anon_limit_hit_info` tells anonymous clients how to authenticate, or is left empty
+- [ ] `authenticated_limit_hit_info` tells authenticated clients what to do next, or is left empty
 - [ ] Provider name appears in startup logs

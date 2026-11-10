@@ -154,10 +154,10 @@ class CutoutsUWSHandler:
         uws_job = AsyncRedisCutoutJob(redis_client=self.redis_client, job_id=job_id)
         limiter = CutoutLimiter(self.redis_client)
 
-        anon_limit_hit_info = auth_registry.anon_limit_hit_info() if principal.is_anonymous else ""
+        limit_hit_info = auth_registry.limit_hit_info(is_anonymous=principal.is_anonymous)
 
         # Reserve the minimum number of cutouts required by the request (positions)
-        await limiter.reserve(principal, job_id, len(position), anon_limit_hit_info=anon_limit_hit_info)
+        await limiter.reserve(principal, job_id, len(position), limit_hit_info=limit_hit_info)
 
         self.logger.info(
             "Creating UWS job",

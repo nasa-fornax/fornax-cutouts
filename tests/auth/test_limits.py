@@ -78,15 +78,15 @@ class TestReserve:
         assert err.limit == LIMIT
         assert err.used == LIMIT
         assert err.requested == 1
-        assert err.anon_limit_hit_info == ""
+        assert err.limit_hit_info == ""
         assert "\n" not in str(err)
 
-    async def test_reserve_includes_anon_limit_hit_info(self, limiter):
+    async def test_reserve_includes_limit_hit_info(self, limiter):
         info = "Authenticate to raise this limit"
         await limiter.reserve(_principal(), "job-1", LIMIT)
         with pytest.raises(CutoutLimitExceededError) as exc_info:
-            await limiter.reserve(_principal(), "job-2", 1, anon_limit_hit_info=info)
-        assert exc_info.value.anon_limit_hit_info == info
+            await limiter.reserve(_principal(), "job-2", 1, limit_hit_info=info)
+        assert exc_info.value.limit_hit_info == info
         assert str(exc_info.value).endswith(info)
 
     async def test_reserve_retry_after_positive(self, limiter):
@@ -159,9 +159,9 @@ class TestReconcile:
         err = exc_info.value
         assert err.limit == LIMIT
         assert err.used == LIMIT
-        assert err.anon_limit_hit_info == ""
+        assert err.limit_hit_info == ""
 
-    def test_reconcile_includes_anon_limit_hit_info(self, sync_limiter):
+    def test_reconcile_includes_limit_hit_info(self, sync_limiter):
         info = "Authenticate to raise this limit"
         sync_limiter.reconcile("test-user", "job-1", actual=LIMIT, cutout_limit=LIMIT, window_seconds=WINDOW)
         with pytest.raises(CutoutLimitExceededError) as exc_info:
@@ -171,9 +171,9 @@ class TestReconcile:
                 actual=1,
                 cutout_limit=LIMIT,
                 window_seconds=WINDOW,
-                anon_limit_hit_info=info,
+                limit_hit_info=info,
             )
-        assert exc_info.value.anon_limit_hit_info == info
+        assert exc_info.value.limit_hit_info == info
         assert str(exc_info.value).endswith(info)
 
     def test_reconcile_updates_existing_reservation(self, sync_limiter):

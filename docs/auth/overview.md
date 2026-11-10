@@ -77,7 +77,7 @@ A `CUTOUTS__CUTOUT_LIMIT__PRINCIPAL_RESOLVER` path that does not exist is logged
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `register_provider`                | Decorator that instantiates and registers the sole auth provider. Raises `RuntimeError` if one is already registered. |
 | `resolve_principal(request)`       | FastAPI dependency. Consults the registered provider and returns its `Principal` when non-`None`. Falls back to an IP-derived anonymous `Principal` when no provider is registered, the provider returns `None`, or it raises `PrincipalResolutionError`. Other exceptions propagate. |
-| `anon_limit_hit_info()`            | Help text appended to anonymous cutout-limit errors. Returns the registered provider's `anon_limit_hit_info`, or `""` when no provider is registered. |
+| `limit_hit_info(is_anonymous)`     | Help text appended to a cutout-limit error. Returns the registered provider's `anon_limit_hit_info` or `authenticated_limit_hit_info`, or `""` when no provider is registered or that field is unset. |
 
 ---
 
@@ -115,7 +115,7 @@ sequenceDiagram
 
 At submission time the limiter reserves `len(position)` as a **placeholder** — the number of sky positions in the request, not the eventual per-file cutout count. This gives immediate feedback (a `429`) before the worker runs, but the placeholder is replaced during reconcile (see below).
 
-The 429 body is the `CutoutLimitExceededError` message, and the response includes a `Retry-After` header. For an anonymous principal, that body gains a second line with the provider's `anon_limit_hit_info` when the string is non-empty. Authenticated principals get the limit message only. The help text is not stored on the job.
+The 429 body is the `CutoutLimitExceededError` message, and the response includes a `Retry-After` header. That body gains a second line from the provider's `anon_limit_hit_info` or `authenticated_limit_hit_info`, when the chosen string is non-empty. The help text is not stored on the job.
 
 The `Principal`'s `identity`, `cutout_limit`, and `window_seconds` are snapshotted on the job at creation, since the worker has no HTTP request to re-resolve auth against:
 
@@ -156,7 +156,7 @@ sequenceDiagram
 Key behaviors:
 
 - **Decrease** (actual < placeholder): always admitted; frees budget for the identity.
-- **Increase** (actual > placeholder): re-checks the identity's current usage against the snapshotted limit before admitting. If it would exceed the limit, the increase is rejected, pending tasks are discarded, and the job is failed with `ExecutionPhase.ERROR` and a `transient` error summary — the client can retry after the window rolls. The rejected job's reservation is refunded rather than held for the rest of the window, since the job never runs. Anonymous jobs (no UWS `owner_id`) include the provider's `anon_limit_hit_info` in that summary when it is non-empty. Clients read it from `GET /cutouts/async/{job_id}/error`.
+- **Increase** (actual > placeholder): re-checks the identity's current usage against the snapshotted limit before admitting. If it would exceed the limit, the increase is rejected, pending tasks are discarded, and the job is failed with `ExecutionPhase.ERROR` and a `transient` error summary — the client can retry after the window rolls. The rejected job's reservation is refunded rather than held for the rest of the window, since the job never runs. The error summary includes the provider's `anon_limit_hit_info` when the job has no UWS `owner_id`, and `authenticated_limit_hit_info` otherwise, when that string is non-empty. Clients read it from `GET /cutouts/async/{job_id}/error`.
 - **Unlimited** (`cutout_limit=None`): no recheck on reconcile; the placeholder is simply updated to the actual count.
 
 ---
@@ -168,7 +168,7 @@ Every provider must subclass `AbstractAuthProvider` and provide:
 1. A class-level `name` attribute, used as the registry key
 2. An implementation of `async resolve(request) -> Principal | None`
 
-Optionally set a class-level `anon_limit_hit_info` string. It is appended to anonymous cutout-limit errors (the submit `429` body and, if reconcile fails the job, the UWS error summary) so clients know how to authenticate. The default is `""`, which adds nothing. Authenticated limit errors never include it.
+Optionally set class-level `anon_limit_hit_info` and `authenticated_limit_hit_info` strings. They are appended to anonymous and authenticated cutout-limit errors (the submit `429` body and, if reconcile fails the job, the UWS error summary). Each defaults to `""`, which adds nothing.
 
 ```python
 from starlette.requests import Request
@@ -178,6 +178,7 @@ from fornax_cutouts.auth import AbstractAuthProvider, Principal
 class MyAuthProvider(AbstractAuthProvider):
     name = "my_auth"
     anon_limit_hit_info = "Send an Authorization: Bearer token to raise this limit."
+    authenticated_limit_hit_info = "Retry after the window resets, or request a higher limit."
 
     async def resolve(self, request: Request) -> Principal | None: ...
 ```

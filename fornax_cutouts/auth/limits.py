@@ -70,7 +70,7 @@ class CutoutLimiter:
         principal: Principal,
         job_id: str,
         requested: int,
-        anon_limit_hit_info: str = "",
+        limit_hit_info: str = "",
     ) -> None:
         """
         Reserve `requested` cutouts against the principal's rolling-window budget.
@@ -79,8 +79,8 @@ class CutoutLimiter:
             principal (Principal): The principal to reserve cutouts against
             job_id (str): The ID of the job
             requested (int): The number of cutouts to reserve
-            anon_limit_hit_info (str): Help text included when this reservation exceeds the limit.
-                Callers pass this for anonymous principals and leave it empty otherwise.
+            limit_hit_info (str): Help text included when this reservation exceeds the limit.
+                Callers pass the anonymous or authenticated provider text for this principal.
 
         Raises:
             CutoutLimitExceededError: If the cutout limit is exceeded
@@ -117,7 +117,7 @@ class CutoutLimiter:
                 used=int(used),
                 requested=requested,
                 retry_after=retry_after,
-                anon_limit_hit_info=anon_limit_hit_info,
+                limit_hit_info=limit_hit_info,
             )
 
     async def release(self, identity: str, job_id: str) -> None:
@@ -132,7 +132,7 @@ class CutoutLimiter:
         actual: int,
         cutout_limit: int | None = None,
         window_seconds: int | None = None,
-        anon_limit_hit_info: str = "",
+        limit_hit_info: str = "",
     ) -> None:
         """
         Update a reservation to the true cutout count once it's known.
@@ -143,8 +143,8 @@ class CutoutLimiter:
             actual (int): The actual number of cutouts
             cutout_limit (int | None): The cutout limit
             window_seconds (int | None): The window seconds
-            anon_limit_hit_info (str): Help text included when reconcile exceeds the limit.
-                Callers pass this for anonymous jobs and leave it empty otherwise.
+            limit_hit_info (str): Help text included when reconcile exceeds the limit.
+                Callers pass the anonymous or authenticated provider text for this job.
 
         Raises:
             CutoutLimitExceededError: If the cutout limit is exceeded
@@ -181,7 +181,7 @@ class CutoutLimiter:
                 used=int(used),
                 requested=actual,
                 retry_after=retry_after,
-                anon_limit_hit_info=anon_limit_hit_info,
+                limit_hit_info=limit_hit_info,
             )
 
 
