@@ -31,6 +31,14 @@ logger = get_logger()
 JOB_SUMMARY_TIME_FIELDS = ["quote", "creation_time", "start_time", "end_time", "destruction"]
 CUTOUT_INDEX_NAME = "cutoutJobsIdx"
 CUTOUT_JOB_PREFIX = f"{CONFIG.worker.redis_prefix}:jobs"
+_UWS_INDEX_FIELDS = [
+    TagField("$.phase", as_name="phase"),
+    NumericField("$.creation_time", as_name="creation_time"),
+    TagField("$.owner_id", as_name="owner_id"),
+    # Valkey Search cannot query a missing tag. 0 means owner_id was omitted.
+    NumericField("$.has_owner", as_name="has_owner"),
+]
+_TAG_SPECIAL_CHARS = set(",.<>{}[]\"':;!@#$%^&*()-+=~|\\/ ")
 TOTAL_PENDING_TASKS_KEY = f"{CONFIG.worker.redis_prefix}:total_pending_tasks"
 CUTOUT_LIMIT_PREFIX = f"{CONFIG.worker.redis_prefix}:cutout_limit"
 POSITIONS_BATCH_SIZE = 100_000
@@ -191,20 +199,23 @@ def setup_index(redis_client: SyncRedisClient | SyncRedisCluster):
 
     try:
         logger.info("Setting up redis indexes")
-        redis_client.ft(CUTOUT_INDEX_NAME).create_index(
-            fields=[
-                TagField("$.phase", as_name="phase"),
-                NumericField("$.creation_time", as_name="creation_time"),
-            ],
+        index = redis_client.ft(CUTOUT_INDEX_NAME)
+        index.create_index(
+            fields=_UWS_INDEX_FIELDS,
             definition=IndexDefinition(
-                prefix=[f"{CUTOUT_JOB_PREFIX}:*:uws"],
+                prefix=[CUTOUT_JOB_PREFIX],
                 index_type=IndexType.JSON,
             ),
         )
 
     except ResponseError as e:
-        if "Index already exists" not in str(e):
+        if "already exists" not in str(e):
             raise
+        logger.info("Redis index already exists, skipping setup")
+
+
+def _escape_tag(value: str) -> str:
+    return "".join(f"\\{char}" if char in _TAG_SPECIAL_CHARS else char for char in value)
 
 
 def json_dumps_with_encoders(obj: Any) -> str:
@@ -223,6 +234,7 @@ def json_dumps_with_encoders(obj: Any) -> str:
 def _build_uws_jobs_search_query(
     phases: list[ExecutionPhase],
     after: UTCTimestamp | None = None,
+    owner_id: str | None = None,
 ) -> str:
     query_str = ""
 
@@ -234,7 +246,12 @@ def _build_uws_jobs_search_query(
         query_str += f"-@phase:{{{ExecutionPhase.ARCHIVED.value}}} "
 
     if after:
-        query_str += f"@creation_time:[{after.timestamp()} +inf]"
+        query_str += f"@creation_time:[{after.timestamp()} +inf] "
+
+    if owner_id:
+        query_str += f"@owner_id:{{{_escape_tag(owner_id)}}} "
+    else:
+        query_str += "@has_owner:[0 0] "
 
     return query_str
 
@@ -265,7 +282,7 @@ async def async_get_uws_jobs(
     uws_jobs = []
 
     if CONFIG.redis.search_en:
-        query_str = _build_uws_jobs_search_query(phases, after=after)
+        query_str = _build_uws_jobs_search_query(phases, after=after, owner_id=owner_id)
         query = Query(query_str).sort_by("creation_time", asc=False).paging(0, last)
 
         results = await redis_client.ft(CUTOUT_INDEX_NAME).search(query)
@@ -427,6 +444,7 @@ class AsyncRedisCutoutJob:
         job_obj = {
             "job_id": self.job_id,
             "phase": ExecutionPhase.PENDING,
+            "has_owner": 1 if owner_id else 0,
         }
         positions_obj = []
 

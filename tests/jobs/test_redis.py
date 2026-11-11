@@ -25,24 +25,33 @@ _POSITIONS = ["10.0, 20.0", "30.0, 40.0"]
 class TestUWSJobPhaseFiltering:
     def test_build_search_query_single_phase(self):
         query = _build_uws_jobs_search_query([ExecutionPhase.QUEUED])
-        assert query == "@phase:{QUEUED} -@phase:{ARCHIVED} "
+        assert query == "@phase:{QUEUED} -@phase:{ARCHIVED} @has_owner:[0 0] "
 
     def test_build_search_query_multiple_phases(self):
         query = _build_uws_jobs_search_query([ExecutionPhase.QUEUED, ExecutionPhase.EXECUTING])
-        assert query == "@phase:{QUEUED | EXECUTING} -@phase:{ARCHIVED} "
+        assert query == "@phase:{QUEUED | EXECUTING} -@phase:{ARCHIVED} @has_owner:[0 0] "
 
     def test_build_search_query_archived_only(self):
         query = _build_uws_jobs_search_query([ExecutionPhase.ARCHIVED])
-        assert query == "@phase:{ARCHIVED} "
+        assert query == "@phase:{ARCHIVED} @has_owner:[0 0] "
 
     def test_build_search_query_without_phase_excludes_archived(self):
         query = _build_uws_jobs_search_query([])
-        assert query == "-@phase:{ARCHIVED} "
+        assert query == "-@phase:{ARCHIVED} @has_owner:[0 0] "
 
     def test_build_search_query_with_after(self):
         after = datetime(2024, 1, 1, tzinfo=UTC)
         query = _build_uws_jobs_search_query([ExecutionPhase.QUEUED], after=after)
-        assert query.endswith(f"@creation_time:[{after.timestamp()} +inf]")
+        assert f"@creation_time:[{after.timestamp()} +inf] " in query
+        assert query.endswith("@has_owner:[0 0] ")
+
+    def test_build_search_query_matches_owner(self):
+        query = _build_uws_jobs_search_query([ExecutionPhase.QUEUED], owner_id="owner-a")
+        assert query.endswith("@owner_id:{owner\\-a} ")
+
+    def test_build_search_query_without_owner_requires_missing_field(self):
+        query = _build_uws_jobs_search_query([ExecutionPhase.QUEUED], owner_id=None)
+        assert query.endswith("@has_owner:[0 0] ")
 
     def test_filter_jobs_by_single_phase(self):
         jobs = [
