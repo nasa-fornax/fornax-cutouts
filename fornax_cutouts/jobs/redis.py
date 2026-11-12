@@ -31,6 +31,14 @@ logger = get_logger()
 JOB_SUMMARY_TIME_FIELDS = ["quote", "creation_time", "start_time", "end_time", "destruction"]
 CUTOUT_INDEX_NAME = "cutoutJobsIdx"
 CUTOUT_JOB_PREFIX = f"{CONFIG.worker.redis_prefix}:jobs"
+_UWS_INDEX_FIELDS = [
+    TagField("$.phase", as_name="phase"),
+    NumericField("$.creation_time", as_name="creation_time"),
+    TagField("$.owner_id", as_name="owner_id"),
+    # Valkey Search cannot query a missing tag. 0 means owner_id was omitted.
+    NumericField("$.has_owner", as_name="has_owner"),
+]
+_TAG_SPECIAL_CHARS = set(",.<>{}[]\"':;!@#$%^&*()-+=~|\\/ ")
 TOTAL_PENDING_TASKS_KEY = f"{CONFIG.worker.redis_prefix}:total_pending_tasks"
 CUTOUT_LIMIT_PREFIX = f"{CONFIG.worker.redis_prefix}:cutout_limit"
 POSITIONS_BATCH_SIZE = 100_000
@@ -191,20 +199,23 @@ def setup_index(redis_client: SyncRedisClient | SyncRedisCluster):
 
     try:
         logger.info("Setting up redis indexes")
-        redis_client.ft(CUTOUT_INDEX_NAME).create_index(
-            fields=[
-                TagField("$.phase", as_name="phase"),
-                NumericField("$.creation_time", as_name="creation_time"),
-            ],
+        index = redis_client.ft(CUTOUT_INDEX_NAME)
+        index.create_index(
+            fields=_UWS_INDEX_FIELDS,
             definition=IndexDefinition(
-                prefix=[f"{CUTOUT_JOB_PREFIX}:*:uws"],
+                prefix=[CUTOUT_JOB_PREFIX],
                 index_type=IndexType.JSON,
             ),
         )
 
     except ResponseError as e:
-        if "Index already exists" not in str(e):
+        if "already exists" not in str(e):
             raise
+        logger.info("Redis index already exists, skipping setup")
+
+
+def _escape_tag(value: str) -> str:
+    return "".join(f"\\{char}" if char in _TAG_SPECIAL_CHARS else char for char in value)
 
 
 def json_dumps_with_encoders(obj: Any) -> str:
@@ -223,6 +234,7 @@ def json_dumps_with_encoders(obj: Any) -> str:
 def _build_uws_jobs_search_query(
     phases: list[ExecutionPhase],
     after: UTCTimestamp | None = None,
+    owner_id: str | None = None,
 ) -> str:
     query_str = ""
 
@@ -234,7 +246,12 @@ def _build_uws_jobs_search_query(
         query_str += f"-@phase:{{{ExecutionPhase.ARCHIVED.value}}} "
 
     if after:
-        query_str += f"@creation_time:[{after.timestamp()} +inf]"
+        query_str += f"@creation_time:[{after.timestamp()} +inf] "
+
+    if owner_id:
+        query_str += f"@owner_id:{{{_escape_tag(owner_id)}}} "
+    else:
+        query_str += "@has_owner:[0 0] "
 
     return query_str
 
@@ -248,16 +265,24 @@ def _filter_uws_jobs_by_phase(
     return [job for job in jobs if job and job.get("phase") != ExecutionPhase.ARCHIVED]
 
 
+def _filter_uws_jobs_by_owner_id(
+    jobs: list[dict[str, Any]],
+    owner_id: str | None = None,
+) -> list[dict[str, Any]]:
+    return [job for job in jobs if job and job.get("owner_id") == owner_id]
+
+
 async def async_get_uws_jobs(
     redis_client: AsyncRedisClient | AsyncRedisCluster,
     phases: list[ExecutionPhase],
     after: datetime | None = None,
     last: int = 100,
+    owner_id: str | None = None,
 ) -> Jobs:
     uws_jobs = []
 
     if CONFIG.redis.search_en:
-        query_str = _build_uws_jobs_search_query(phases, after=after)
+        query_str = _build_uws_jobs_search_query(phases, after=after, owner_id=owner_id)
         query = Query(query_str).sort_by("creation_time", asc=False).paging(0, last)
 
         results = await redis_client.ft(CUTOUT_INDEX_NAME).search(query)
@@ -278,6 +303,7 @@ async def async_get_uws_jobs(
                 value = await redis_client.json().mget(batch_keys, Path.root_path())
                 uws_jobs.extend(value)
 
+            uws_jobs = _filter_uws_jobs_by_owner_id(uws_jobs, owner_id)
             uws_jobs = _filter_uws_jobs_by_phase(uws_jobs, phases)
             uws_jobs.sort(key=lambda job: job["creation_time"], reverse=True)
             uws_jobs = uws_jobs[:last]
@@ -308,7 +334,7 @@ class AsyncRedisCutoutJob:
         self.__redis_client = redis_client
         self.__keys = RedisKeys(job_id)
 
-    async def ensure_exists(self) -> dict:
+    async def ensure_exists(self, owner_id: str | None = None) -> dict:
         """
         Return the UWS job document.
 
@@ -320,6 +346,8 @@ class AsyncRedisCutoutJob:
         """
         job_json = await self.__redis_client.json().get(self.__keys.uws)
         if not job_json:
+            raise CutoutJobNotFoundError(self.job_id)
+        if job_json.get("owner_id") != owner_id:
             raise CutoutJobNotFoundError(self.job_id)
         return job_json
 
@@ -392,6 +420,7 @@ class AsyncRedisCutoutJob:
         self,
         run_id: str | None = None,
         parameters: dict | None = None,
+        owner_id: str | None = None,
         identity: str = _UNKNOWN_CLIENT_BUCKET,
         cutout_limit: int | None = None,
         window_seconds: int | None = None,
@@ -406,6 +435,7 @@ class AsyncRedisCutoutJob:
             run_id (str | None): Optional run ID from the UWS spec.
             parameters (dict): Job parameters; ``position`` (list) is extracted into a
                 separate Redis list and replaced with ``position_count``.
+            owner_id (str | None): Optional owner ID from the UWS spec, this is the non-anonymous identity of the user.
             identity (str): Principal identity for cutout-limit tracking (default: _UNKNOWN_CLIENT_BUCKET).
             cutout_limit (int | None): Max cutouts allowed within the rate window (default: None, unlimited).
             window_seconds (int | None): Rolling rate-limit window in seconds (default: None, unlimited).
@@ -414,6 +444,7 @@ class AsyncRedisCutoutJob:
         job_obj = {
             "job_id": self.job_id,
             "phase": ExecutionPhase.PENDING,
+            "has_owner": 1 if owner_id else 0,
         }
         positions_obj = []
 
@@ -425,6 +456,9 @@ class AsyncRedisCutoutJob:
             positions_obj = parameters.pop("position", [])
             parameters["position_count"] = len(positions_obj)
             job_obj["parameters"] = parameters
+
+        if owner_id:
+            job_obj["owner_id"] = owner_id
 
         await self.__update_uws(path="$", obj=job_obj)
 
@@ -458,7 +492,7 @@ class AsyncRedisCutoutJob:
                 pipe.expireat(key, int(destruction_time.timestamp()))
             await pipe.execute()
 
-    async def get_job_summary(self, base_url: str = "") -> JobSummary:
+    async def get_job_summary(self, base_url: str = "", owner_id: str | None = None) -> JobSummary:
         """
         Return a UWS ``JobSummary``.
 
@@ -467,6 +501,7 @@ class AsyncRedisCutoutJob:
 
         Args:
             base_url (str): Optional URL prefix for the positions parameter link.
+            owner_id (str | None): Optional owner ID from the UWS spec, this is the non-anonymous identity of the user.
 
         Raises:
             CutoutJobNotFoundError: If no UWS document exists for this job.
@@ -474,15 +509,18 @@ class AsyncRedisCutoutJob:
         Returns:
             JobSummary: Parsed UWS job summary.
         """
-        job_json = await self.ensure_exists()
+        job_json = await self.ensure_exists(owner_id=owner_id)
         if base_url:
             job_json["parameters"]["position"] = f"{base_url}/parameters/position"
 
         return create_job_summary(**job_json)
 
-    async def get_job_result_status(self) -> dict:
+    async def get_job_result_status(self, owner_id: str | None = None) -> dict:
         """
         Return per-task counters for this job.
+
+        Args:
+            owner_id (str | None): Optional owner ID from the UWS spec, this is the non-anonymous identity of the user.
 
         Raises:
             CutoutJobNotFoundError: If no UWS document exists for this job.
@@ -492,7 +530,7 @@ class AsyncRedisCutoutJob:
             ``executing_jobs``, ``completed_jobs``, ``skipped_jobs``, ``failed_jobs``,
             and ``total_jobs``.
         """
-        await self.ensure_exists()
+        await self.ensure_exists(owner_id=owner_id)
         async with self.__redis_client.pipeline() as pipe:
             pipe.llen(self.__keys.pending_tasks)
             pipe.get(self.__keys.queued_task_count)
@@ -530,7 +568,7 @@ class AsyncRedisCutoutJob:
             "total_jobs": total_tasks,
         }
 
-    async def get_job_parameters(self, position_base_url: str) -> Parameters:
+    async def get_job_parameters(self, position_base_url: str, owner_id: str | None = None) -> Parameters:
         """
         Return job parameters with ``position`` replaced by a URL.
 
@@ -538,6 +576,7 @@ class AsyncRedisCutoutJob:
 
         Args:
             position_base_url (str): URL pointing to the paginated positions endpoint.
+            owner_id (str | None): Optional owner ID from the UWS spec, this is the non-anonymous identity of the user.
 
         Raises:
             CutoutJobNotFoundError: If no UWS document exists for this job.
@@ -545,12 +584,18 @@ class AsyncRedisCutoutJob:
         Returns:
             Parameters: Parsed UWS parameters model.
         """
-        job_json = await self.ensure_exists()
+        job_json = await self.ensure_exists(owner_id=owner_id)
         job_parameters = job_json["parameters"]
         job_parameters["position"] = f"{position_base_url}"
         return create_parameters(**job_parameters)
 
-    async def get_job_positions(self, page: int = 0, limit: int = 100, base_url: str = "") -> dict:
+    async def get_job_positions(
+        self,
+        page: int = 0,
+        limit: int = 100,
+        base_url: str = "",
+        owner_id: str | None = None,
+    ) -> dict:
         """
         Return a paginated slice of position strings for this job due to possible large number of positions.
 
@@ -558,6 +603,7 @@ class AsyncRedisCutoutJob:
             page (int): Zero-based page index.
             limit (int): Maximum positions per page.
             base_url (str): Base URL used to build pagination links in the response metadata.
+            owner_id (str | None): Optional owner ID from the UWS spec, this is the non-anonymous identity of the user.
 
         Raises:
             CutoutJobNotFoundError: If no UWS document exists for this job.
@@ -565,7 +611,7 @@ class AsyncRedisCutoutJob:
         Returns:
             dict: Pagination metadata plus a ``positions`` list of position strings.
         """
-        await self.ensure_exists()
+        await self.ensure_exists(owner_id=owner_id)
         start = page * limit
         end = (page + 1) * limit - 1
         positions = await self.__redis_client.lrange(self.__keys.positions, start, end)
@@ -675,6 +721,18 @@ class SyncRedisCutoutJob:
         if phase and phase[0]:
             return ExecutionPhase(phase[0])
         return ExecutionPhase.UNKNOWN
+
+    def get_job_owner_id(self) -> str | None:
+        """
+        Return the owner ID for this job.
+
+        Returns:
+            str | None: Owner ID.
+        """
+        owner_id = self.__redis_client.json().get(self.__keys.uws, "$.owner_id")
+        if owner_id and owner_id[0]:
+            return owner_id[0]
+        return None
 
     def get_cutout_limit_budget(self) -> tuple[str | None, int | None, int | None]:
         """
