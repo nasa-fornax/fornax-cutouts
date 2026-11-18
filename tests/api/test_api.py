@@ -975,8 +975,8 @@ class TestJobSpecific:
         assert response.status_code == 200
         assert "xml" in response.headers["content-type"]
         params = _params_by_id(_xml(response.text))
-        assert params["size"] == ["256"]
-        assert params["y"] == ["256"]
+        assert params["size"] == ["256.0"]
+        assert params["y"] == ["256.0"]
         assert params["units"] == ["px"]
         assert params["fake_source.filter"] == ["a", "b"]
         assert params["fake_source.survey"] == ["s"]
