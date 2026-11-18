@@ -483,6 +483,52 @@ class TestSync:
         assert body["science"] == "/cutouts/sync/job/file.fits"
         assert body["preview"] == "/cutouts/sync/job/file.jpg"
 
+    def test_single_cutout_rejects_angular_size_over_inferred_mission_max(self, api, monkeypatch):
+        monkeypatch.setattr(api.source, "source_file_patterns", ("s3://example/source/*",))
+        response = api.client.get(
+            "/api/v0/cutouts/sync/single",
+            params={"filename": _SYNC_FILENAME, "ra": _SYNC_RA, "dec": _SYNC_DEC, "size": 1, "units": "d"},
+        )
+        assert response.status_code == 422
+        assert "fake_source" in response.json()["detail"]
+        assert "4 px" in response.json()["detail"]
+        api.execute_cutout.apply_async.assert_not_called()
+
+    def test_single_cutout_rejects_pixel_size_over_inferred_mission_max(self, api, monkeypatch):
+        monkeypatch.setattr(api.source, "source_file_patterns", ("s3://example/source/*",))
+        response = api.client.get(
+            "/api/v0/cutouts/sync/single",
+            params={"filename": _SYNC_FILENAME, "ra": _SYNC_RA, "dec": _SYNC_DEC, "size": 5},
+        )
+        assert response.status_code == 422
+        api.execute_cutout.apply_async.assert_not_called()
+
+    def test_single_cutout_allows_angular_size_within_inferred_mission_max(self, api, monkeypatch):
+        monkeypatch.setattr(api.source, "source_file_patterns", ("s3://example/source/*",))
+        response = api.client.get(
+            "/api/v0/cutouts/sync/single",
+            params={"filename": _SYNC_FILENAME, "ra": _SYNC_RA, "dec": _SYNC_DEC, "size": 2, "units": "s"},
+        )
+        assert response.status_code == 200
+
+    def test_color_preview_rejects_size_over_inferred_mission_max(self, api, monkeypatch):
+        monkeypatch.setattr(api.source, "source_file_patterns", ("*/blue.fits",))
+        response = api.client.get(
+            "/api/v0/cutouts/sync/color",
+            params={
+                "red": _SYNC_RED,
+                "green": _SYNC_GREEN,
+                "blue": _SYNC_BLUE,
+                "ra": _SYNC_RA,
+                "dec": _SYNC_DEC,
+                "size": 1,
+                "units": "m",
+            },
+        )
+        assert response.status_code == 422
+        assert "fake_source" in response.json()["detail"]
+        api.execute_color_preview.apply_async.assert_not_called()
+
 
 class TestMetadata:
     def test_all_missions(self, client):
@@ -929,8 +975,8 @@ class TestJobSpecific:
         assert response.status_code == 200
         assert "xml" in response.headers["content-type"]
         params = _params_by_id(_xml(response.text))
-        assert params["size"] == ["256.0"]
-        assert params["y"] == ["256.0"]
+        assert params["size"] == ["256"]
+        assert params["y"] == ["256"]
         assert params["units"] == ["px"]
         assert params["fake_source.filter"] == ["a", "b"]
         assert params["fake_source.survey"] == ["s"]
