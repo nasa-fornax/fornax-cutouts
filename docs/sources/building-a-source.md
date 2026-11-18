@@ -102,7 +102,7 @@ class MyMissionSource(AbstractMissionSource):
 MissionMetadata(
     name="my_mission",  # must match the register_source() key
     pixel_size=0.5,  # arcseconds per pixel (used for coordinate math)
-    max_cutout_size=2000,  # requests larger than this are rejected with 422
+    max_cutout_size=2000,  # max cutout size in pixels, per axis
     filter=["g", "r", "i"],  # valid values for the filter parameter
     survey=["wide"],  # valid values for the survey parameter
 )

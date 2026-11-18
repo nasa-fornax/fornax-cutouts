@@ -117,7 +117,7 @@ class MySource(AbstractMissionSource):
 | ----------------- | ----------- | ---------------------------------------------------------------------------- |
 | `name`            | `str`       | Unique mission identifier. Must match the key used in `register_source()`.   |
 | `pixel_size`      | `float`     | Pixel scale in arcseconds per pixel.                                         |
-| `max_cutout_size` | `int`       | Maximum allowed cutout size in pixels. Requests exceeding this are rejected. |
+| `max_cutout_size` | `int`       | Maximum allowed cutout size in pixels per axis. See [Built-in Validation](#built-in-validation). |
 | `filter`          | `list[str]` | Valid filter names for this mission.                                         |
 | `survey`          | `list[str]` | Valid survey names for this mission.                                         |
 
@@ -131,6 +131,8 @@ class MySource(AbstractMissionSource):
 - each axis of `size` is `<= metadata.max_cutout_size`
 - `filter` value(s) are in `metadata.filter`
 - `survey` value(s) are in `metadata.survey`
+
+In async jobs, a mission that fails validation is skipped and the rest of the job still runs; the skip is logged by the worker but not reported in the job's results. Sync requests return `422` when the size exceeds the `max_cutout_size` of a mission inferred from the source file.
 
 You can override `validate_request()` to add custom validation logic.
 
