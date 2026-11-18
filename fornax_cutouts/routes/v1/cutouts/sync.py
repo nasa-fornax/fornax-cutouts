@@ -59,7 +59,7 @@ def _check_max_cutout_size(source_files: list[str], size: SizeSpec) -> None:
         x_px, y_px = cutout_registry.resolve_size_px(mission, size)
         if x_px > max_size or y_px > max_size:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=(
                     f"Requested size of ({x_px}, {y_px}) px exceeds the maximum cutout size "
                     f"for mission '{mission}' ({max_size} px)"
