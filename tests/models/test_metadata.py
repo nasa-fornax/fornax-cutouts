@@ -58,14 +58,6 @@ def _registry_fixture():
     _teardown_registry()
 
 
-def setup_function():
-    _setup_registry()
-
-
-def teardown_function():
-    _teardown_registry()
-
-
 def _missions_dump(request):
     return {name: req.model_dump(exclude_none=True) for name, req in request.missions.items()}
 
