@@ -26,7 +26,7 @@ from fornax_cutouts.jobs.redis import SyncRedisCutoutJob
 from fornax_cutouts.jobs.results import CutoutResults
 from fornax_cutouts.models.base import TargetPosition
 from fornax_cutouts.models.cutouts import CutoutResponse
-from fornax_cutouts.sources import cutout_registry
+from fornax_cutouts.sources import SourceFileResolutionException, cutout_registry
 from fornax_cutouts.utils.exceptions import CutoutLimitExceededError, NoTasksRemainingInJobError
 from fornax_cutouts.utils.target_resolver import resolve_positions
 from fornax_cutouts.utils.units import SizeSpec
@@ -1162,7 +1162,7 @@ def execute_cutout(
             is_async=is_async,
         )
 
-    except astrocut.exceptions.InvalidQueryError:
+    except (astrocut.exceptions.InvalidQueryError, SourceFileResolutionException):
         if is_async:
             remaining = r.skip_task(batch_num, increment_id)
 
@@ -1181,8 +1181,7 @@ def execute_cutout(
                 "size": size.model_dump(),
             },
         )
-
-    except Exception as e:  # noqa: BLE001, record any failure
+    except Exception as e:  # noqa: BLE001
         if is_async:
             remaining = r.fail_task(
                 batch_num=batch_num,

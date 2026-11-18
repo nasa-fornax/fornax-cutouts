@@ -8,7 +8,12 @@ import pytest
 from fornax_cutouts.jobs.tasks import generate_color_preview, generate_cutout
 from fornax_cutouts.models.base import TargetPosition
 from fornax_cutouts.models.cutouts import FilenameLookupResponse
-from fornax_cutouts.sources import AbstractMissionSource, MissionMetadata, cutout_registry
+from fornax_cutouts.sources import (
+    AbstractMissionSource,
+    MissionMetadata,
+    SourceFileResolutionException,
+    cutout_registry,
+)
 from fornax_cutouts.utils.units import SizeSpec
 
 CUTOUT_FILE_ASDF = "tests/data/sample_8.464454_-43.850641_100x100.asdf"
@@ -170,6 +175,8 @@ class ResolvingSource(AbstractMissionSource):
         return []
 
     def resolve_source_file(self, source_file: str) -> str:
+        if source_file == "bad_file.asdf":
+            raise SourceFileResolutionException(f"Cannot resolve source file: {source_file}")
         return CUTOUT_FILE_ASDF
 
 
@@ -187,3 +194,16 @@ def test_generate_cutout_resolves_source_file(tmp_path, monkeypatch, mission):
 
     assert response.mission == "resolving_source"
     assert response.science is not None and Path(response.science).exists()
+
+
+def test_generate_cutout_raises_file_resolution_exception(tmp_path, monkeypatch):
+    monkeypatch.setitem(cutout_registry._SOURCES, "resolving_source", ResolvingSource())
+
+    with pytest.raises(SourceFileResolutionException):
+        generate_cutout(
+            source_file="bad_file.asdf",
+            target=TargetPosition(ra=8.46340835, dec=-43.8514),
+            size=(10, 10),
+            output_dir=str(tmp_path),
+            mission="resolving_source",
+        )
