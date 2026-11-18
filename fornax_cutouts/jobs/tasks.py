@@ -162,7 +162,6 @@ def schedule_job(
         target_fnames = cutout_registry.get_target_filenames(
             position=resolved_positions,
             mission_params=valid_mission_params,
-            size=size,
         )
 
         descriptors = []

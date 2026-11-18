@@ -115,7 +115,6 @@ class CutoutRegistry:
         self,
         position: Positions,
         mission_params: dict[str, dict],
-        size: SizeSpec | int | None = None,
     ) -> list[FilenameLookupResponse]:
         """
         Get the target filenames for a given position and mission parameters.
@@ -123,7 +122,6 @@ class CutoutRegistry:
         Args:
             position (Positions): The position to get the filenames for.
             mission_params (dict[str, dict]): The mission parameters to get the filenames for.
-            size (SizeSpec | int | None): The requested cutout size.
 
         Returns:
             list[FilenameLookupResponse]: The target filenames for the given position and mission parameters.
