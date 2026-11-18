@@ -240,10 +240,10 @@ def get_filenames(
 
 ### Custom Validation
 
-Override `validate_request()` to add mission-specific validation beyond the built-in size and filter checks:
+Override `validate_request()` to add mission-specific validation beyond the built-in size and filter checks. `size` is an `(x, y)` tuple in pixels, already converted from angular units using `metadata.pixel_size`:
 
 ```python
-def validate_request(self, size: int, **extras) -> bool:
+def validate_request(self, size: tuple[int, int], **extras) -> bool:
     # Run the standard checks first
     is_valid = super().validate_request(size=size, **extras)
 

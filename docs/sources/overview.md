@@ -125,10 +125,10 @@ class MySource(AbstractMissionSource):
 
 ### Built-in Validation
 
-`AbstractMissionSource.validate_request()` is called by the registry before dispatching any job. It checks:
+`AbstractMissionSource.validate_request()` is called by the registry before dispatching any job. `size` is an `(x, y)` tuple in pixels. Angular sizes are converted using `metadata.pixel_size`. It checks:
 
-- `size > 0`
-- `size <= metadata.max_cutout_size`
+- each axis of `size` is `> 0`
+- each axis of `size` is `<= metadata.max_cutout_size`
 - `filter` value(s) are in `metadata.filter`
 - `survey` value(s) are in `metadata.survey`
 
