@@ -4,7 +4,7 @@ import uuid
 from typing import Annotated
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Query, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 from fastapi_utils.cbv import cbv
 from fsspec import AbstractFileSystem, filesystem
@@ -13,6 +13,7 @@ from fornax_cutouts.config import CONFIG
 from fornax_cutouts.jobs.tasks import enqueue_task, execute_color_preview, execute_cutout
 from fornax_cutouts.models.base import TargetPosition
 from fornax_cutouts.models.cutouts import CutoutResponse
+from fornax_cutouts.sources import cutout_registry
 from fornax_cutouts.utils.units import SizeSpec, SizeUnit
 
 sync_router = APIRouter(prefix="/cutouts", tags=["Sync Cutouts"])
@@ -46,6 +47,24 @@ def _public_cutout_urls(ret: CutoutResponse) -> CutoutResponse:
         if ret.preview:
             ret.preview = ret.preview.replace(CONFIG.storage.prefix, "")
     return ret
+
+
+def _check_max_cutout_size(source_files: list[str], size: SizeSpec) -> None:
+    """Raise a 422 if ``size`` exceeds the max cutout size of any mission inferred from ``source_files``."""
+    for source_file in source_files:
+        mission = cutout_registry.infer_mission(source_file)
+        if mission is None:
+            continue
+        max_size = cutout_registry.get_mission(mission).metadata.max_cutout_size
+        x_px, y_px = cutout_registry.resolve_size_px(mission, size)
+        if x_px > max_size or y_px > max_size:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=(
+                    f"Requested size of ({x_px}, {y_px}) px exceeds the maximum cutout size "
+                    f"for mission '{mission}' ({max_size} px)"
+                ),
+            )
 
 
 async def _wait_for_result(async_result, timeout: float = 15.0, poll_interval: float = 0.2):
@@ -102,6 +121,9 @@ class CutoutsSyncHandler:
         Generate a FITS and JPEG cutout for a specified source
         """
 
+        size_spec = SizeSpec(x=size, y=y, units=units)
+        _check_max_cutout_size([filename], size_spec)
+
         if not job_id:
             job_id = uuid.uuid4().hex[:8]
 
@@ -114,7 +136,7 @@ class CutoutsSyncHandler:
                 "job_id": job_id,
                 "source_file": filename,
                 "target": TargetPosition(ra, dec),
-                "size": SizeSpec(x=size, y=y, units=units).model_dump(),
+                "size": size_spec.model_dump(),
                 "generate_science": True,
                 "generate_preview": include_preview,
                 "output_dir": output_dir,
@@ -151,6 +173,9 @@ class CutoutsSyncHandler:
         """
         Generate a color JPEG preview of a cutout
         """
+        size_spec = SizeSpec(x=size, y=y, units=units)
+        _check_max_cutout_size([red, green, blue], size_spec)
+
         if not job_id:
             job_id = uuid.uuid4().hex[:8]
 
@@ -164,7 +189,7 @@ class CutoutsSyncHandler:
                 "green": green,
                 "blue": blue,
                 "target": TargetPosition(ra, dec),
-                "size": SizeSpec(x=size, y=y, units=units).model_dump(),
+                "size": size_spec.model_dump(),
                 "output_dir": output_dir,
             },
             task_id=f"sync-color-{job_id}-{task_uid}",
