@@ -1133,6 +1133,8 @@ def execute_cutout(
         increment_id (int): Index within the batch for Redis aggregation.
         owner_id (str | None): Job owner resolved once per batch. Anonymous jobs pass None.
     """
+    # Save task kwargs for logging, if needed
+    task_kwargs = locals().copy()
     metadata = metadata or {}
     is_async = batch_num > 0
     mission = _resolve_mission(source_file, mission)
@@ -1147,72 +1149,56 @@ def execute_cutout(
         r = SyncRedisCutoutJob(redis_client=redis_client_factory(), job_id=job_id)
         r.start_task(batch_num, increment_id)
 
-    try:
-        resp = generate_cutout(
-            job_id=job_id,
-            owner_id=owner_id,
-            source_file=source_file,
-            target=target,
-            size=size,
-            generate_science=generate_science,
-            generate_preview=generate_preview,
-            output_dir=output_dir,
-            mission=mission,
-            metadata=metadata,
-            is_async=is_async,
-        )
+    cutout_kwargs = {
+        "job_id": job_id,
+        "owner_id": owner_id,
+        "source_file": source_file,
+        "target": target,
+        "size": size,
+        "generate_science": generate_science,
+        "generate_preview": generate_preview,
+        "output_dir": output_dir,
+        "mission": mission,
+        "metadata": metadata,
+        "is_async": is_async,
+    }
 
-    except (astrocut.exceptions.InvalidQueryError, SourceFileResolutionException):
+    try:
+        resp = generate_cutout(**cutout_kwargs)
+
+    except astrocut.exceptions.InvalidQueryError:
         if is_async:
             remaining = r.skip_task(batch_num, increment_id)
 
         logger.info(
             f"Job {job_id} cutout skipped (cutout has no data): mission='{mission}' source='{source_file}'",
-            extra={
-                "event": "cutout_skipped",
-                "job_id": job_id,
-                "owner_id": owner_id,
-                "mission": mission,
-                "source_file": source_file,
-                "target": {
-                    "ra": target.ra,
-                    "dec": target.dec,
-                },
-                "size": size.model_dump(),
-            },
+            extra={"event": "cutout_skipped"} | cutout_kwargs,
         )
-    except Exception as e:  # noqa: BLE001
+    except SourceFileResolutionException as e:
         if is_async:
             remaining = r.fail_task(
                 batch_num=batch_num,
                 increment_id=increment_id,
-                task_kwargs={
-                    "job_id": job_id,
-                    "source_file": source_file,
-                    "target": target,
-                    "size": size.model_dump(),
-                    "generate_science": generate_science,
-                    "generate_preview": generate_preview,
-                    "output_dir": output_dir,
-                    "mission": mission,
-                    "metadata": metadata,
-                },
+                task_kwargs=task_kwargs,
+                error_message=str(e),
+            )
+
+        logger.info(
+            f"Job {job_id} cutout skipped (source file could not be resolved): mission='{mission}' source='{source_file}'",
+            extra={"event": "cutout_skipped"} | cutout_kwargs,
+        )
+    except Exception as e:
+        if is_async:
+            remaining = r.fail_task(
+                batch_num=batch_num,
+                increment_id=increment_id,
+                task_kwargs=task_kwargs,
                 error_message=str(e),
             )
 
         logger.warning(
             f"Job {job_id} cutout failed: {e!r}",
-            extra={
-                "event": "cutout_failed",
-                "job_id": job_id,
-                "owner_id": owner_id,
-                "mission": mission,
-                "source_file": source_file,
-                "target": target,
-                "size": size.model_dump(),
-                "error": e.__repr__(),
-                "error_type": type(e).__name__,
-            },
+            extra={"event": "cutout_failed"} | cutout_kwargs,
             exc_info=True,
         )
 
