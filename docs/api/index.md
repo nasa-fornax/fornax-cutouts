@@ -71,11 +71,11 @@ Sync endpoints execute cutouts inline and return results immediately. Suitable f
 | `ra`              | `float`  | Yes      | Right ascension in decimal degrees (0 to 360).          |
 | `dec`             | `float`  | Yes      | Declination in decimal degrees (−90 to 90).             |
 | `size`            | `float`  | Yes      | Cutout width in `units`.                               |
-| `y`               | `float`  | No       | Cutout height in `units`. Defaults to `size` (square). |
-| `units`           | `string` | No       | Units for `size` and `y`: `px` (default), `s` (arcsec), `m` (arcmin), `d` (deg). |
+| `size_y`          | `float`  | No       | Cutout height in `units`. Defaults to `size` (square). |
+| `units`           | `string` | No       | Units for `size` and `size_y`: `px` (default), `s` (arcsec), `m` (arcmin), `d` (deg). |
 | `include_preview` | `bool`   | No       | Also generate a JPEG preview alongside the FITS cutout. |
 
-`/sync/color` accepts the same `size`, `y`, and `units` parameters.
+`/sync/color` accepts the same `size`, `size_y`, and `units` parameters.
 
 If a mission can be inferred from a source file (see `source_file_patterns`), the requested size is converted to pixels using that mission's `pixel_size` and checked against its `max_cutout_size`. Requests that exceed it return `422`.
 
@@ -131,8 +131,8 @@ Jobs are submitted as `multipart/form-data`. Mission-specific parameters are pas
 | Field               | Type          | Description                                                                                   |
 | ------------------- | ------------- | --------------------------------------------------------------------------------------------- |
 | `output_format`     | `string[]`    | Output formats: `fits` (default), `jpeg`.                                                     |
-| `y`                 | `float`       | Cutout height in `units`. Defaults to `size` (square).                                       |
-| `units`             | `string`      | Units for `size` and `y`: `px` (default), `s` (arcsec), `m` (arcmin), `d` (deg).              |
+| `size_y`            | `float`       | Cutout height in `units`. Defaults to `size` (square).                                       |
+| `units`             | `string`      | Units for `size` and `size_y`: `px` (default), `s` (arcsec), `m` (arcmin), `d` (deg).              |
 | `RUNID`             | `string`      | Client-provided run identifier (max 64 chars).                                                |
 | `{mission}.{param}` | `string`      | Mission-specific parameter (e.g. `{mission}.filter=r`).                                       |
 | `{mission}`         | `JSON string` | All mission params as a JSON object (e.g. `{mission}={"filter":"r", "survey": "my_survey"}`). |

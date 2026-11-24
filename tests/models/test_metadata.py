@@ -169,7 +169,7 @@ class TestMultiMissionCutoutRequestSize:
 
     def test_size_y_and_units(self):
         request = MultiMissionCutoutRequest.model_validate(
-            {"position": ["m101"], "size": "60", "y": "30", "units": "s"}
+            {"position": ["m101"], "size": "60", "size_y": "30", "units": "s"}
         )
         assert request.size_spec == SizeSpec(x=60, y=30, units="s")
 

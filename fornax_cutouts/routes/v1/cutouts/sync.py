@@ -109,10 +109,10 @@ class CutoutsSyncHandler:
         filename: Annotated[str, Query(description="Publicly available source URL/S3 URI to generate a cutout for")],
         ra: Annotated[float, Query(description="Central RA coordinate to generate cutout for")],
         dec: Annotated[float, Query(description="Central Dec coordinate to generate cutout for")],
-        size: Annotated[float, Query(description="Cutout width; height defaults to this if 'y' is omitted", gt=0)],
-        y: Annotated[float | None, Query(description="Cutout height; defaults to 'size' (square)", gt=0)] = None,
+        size: Annotated[float, Query(description="Cutout width; height defaults to this if 'size_y' is omitted", gt=0)],
+        size_y: Annotated[float | None, Query(description="Cutout height; defaults to 'size' (square)", gt=0)] = None,
         units: Annotated[
-            SizeUnit, Query(description="Units for size/y: px (default), s (arcsec), m (arcmin), d (deg)")
+            SizeUnit, Query(description="Units for size/size_y: px (default), s (arcsec), m (arcmin), d (deg)")
         ] = "px",
         include_preview: Annotated[bool, Query(description="Include a JPEG preview of the cutout")] = True,
         job_id: Annotated[str, Query(description="Job ID to generate the cutout for")] = "",
@@ -121,7 +121,7 @@ class CutoutsSyncHandler:
         Generate a FITS and JPEG cutout for a specified source
         """
 
-        size_spec = SizeSpec(x=size, y=y, units=units)
+        size_spec = SizeSpec(x=size, y=size_y, units=units)
         _check_max_cutout_size([filename], size_spec)
 
         if not job_id:
@@ -163,17 +163,17 @@ class CutoutsSyncHandler:
         blue: Annotated[str, Query(description="Blue channel for a color cutout preview")],
         ra: Annotated[float, Query(description="Central RA coordinate to generate cutout for")],
         dec: Annotated[float, Query(description="Central Dec coordinate to generate cutout for")],
-        size: Annotated[float, Query(description="Cutout width; height defaults to this if 'y' is omitted", gt=0)],
-        y: Annotated[float | None, Query(description="Cutout height; defaults to 'size' (square)", gt=0)] = None,
+        size: Annotated[float, Query(description="Cutout width; height defaults to this if 'size_y' is omitted", gt=0)],
+        size_y: Annotated[float | None, Query(description="Cutout height; defaults to 'size' (square)", gt=0)] = None,
         units: Annotated[
-            SizeUnit, Query(description="Units for size/y: px (default), s (arcsec), m (arcmin), d (deg)")
+            SizeUnit, Query(description="Units for size/size_y: px (default), s (arcsec), m (arcmin), d (deg)")
         ] = "px",
         job_id: Annotated[str, Query(description="Job ID to generate the cutout for")] = "",
     ) -> CutoutResponse:
         """
         Generate a color JPEG preview of a cutout
         """
-        size_spec = SizeSpec(x=size, y=y, units=units)
+        size_spec = SizeSpec(x=size, y=size_y, units=units)
         _check_max_cutout_size([red, green, blue], size_spec)
 
         if not job_id:

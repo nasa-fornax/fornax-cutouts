@@ -145,7 +145,7 @@ class CutoutsUWSHandler:
         request_params = {
             "position": position,
             "size": size_spec.x,
-            "y": size_spec.y,
+            "size_y": size_spec.y,
             "units": size_spec.units,
             "generate_science": generate_science,
             "generate_preview": generate_preview,

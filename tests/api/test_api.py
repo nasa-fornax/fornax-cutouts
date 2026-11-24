@@ -426,7 +426,7 @@ class TestSync:
                 "ra": _SYNC_RA,
                 "dec": _SYNC_DEC,
                 "size": 300,
-                "y": 150,
+                "size_y": 150,
             },
         )
         assert response.status_code == 200
@@ -685,12 +685,12 @@ class TestRequestFormats:
     def test_async_rectangular_angular_size(self, api):
         response = api.client.post(
             "/api/v0/cutouts/async",
-            data={"position": ["m101"], "size": "60", "y": "30", "units": "s", "fake_source": '{"filter": ["a"]}'},
+            data={"position": ["m101"], "size": "60", "size_y": "30", "units": "s", "fake_source": '{"filter": ["a"]}'},
             follow_redirects=False,
         )
         assert response.status_code == 303
         params = _job_uws(api.redis, _created_job_id(response))["parameters"]
-        assert (params["size"], params["y"], params["units"]) == (60, 30, "s")
+        assert (params["size"], params["size_y"], params["units"]) == (60, 30, "s")
 
     def test_async_invalid_size_units_rejected(self, api):
         response = api.client.post(
@@ -730,7 +730,7 @@ class TestAsyncUWS:
         job = _job_uws(api.redis, job_id)
         assert job["run_id"] == "test-run-id"
         assert job["parameters"]["size"] == 256
-        assert job["parameters"]["y"] == 256
+        assert job["parameters"]["size_y"] == 256
         assert job["parameters"]["units"] == "px"
         assert job["parameters"]["generate_science"] is True
         assert job["parameters"]["generate_preview"] is True
@@ -976,7 +976,7 @@ class TestJobSpecific:
         assert "xml" in response.headers["content-type"]
         params = _params_by_id(_xml(response.text))
         assert params["size"] == ["256.0"]
-        assert params["y"] == ["256.0"]
+        assert params["size_y"] == ["256.0"]
         assert params["units"] == ["px"]
         assert params["fake_source.filter"] == ["a", "b"]
         assert params["fake_source.survey"] == ["s"]

@@ -100,12 +100,12 @@ class MultiMissionRequest(BaseModel):
 class MultiMissionCutoutRequest(MultiMissionRequest):
     """Cutout request across multiple missions.
 
-    ``size`` is the cutout width; ``y`` is the height and defaults to ``size``. Both are in ``units``
+    ``size`` is the cutout width; ``size_y`` is the height and defaults to ``size``. Both are in ``units``
     (``px``, ``s``, ``m``, ``d``), which defaults to pixels.
     """
 
     size: float = Field(gt=0)
-    y: float | None = Field(default=None, gt=0)
+    size_y: float | None = Field(default=None, gt=0)
     units: SizeUnit = "px"
     generate_science: bool = Field(True)
     generate_preview: bool = Field(False)
@@ -115,7 +115,7 @@ class MultiMissionCutoutRequest(MultiMissionRequest):
 
     @property
     def size_spec(self) -> SizeSpec:
-        return SizeSpec(x=self.size, y=self.y, units=self.units)
+        return SizeSpec(x=self.size, y=self.size_y, units=self.units)
 
 
 class FilenameCountResponse(BaseModel):

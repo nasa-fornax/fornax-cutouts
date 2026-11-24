@@ -114,7 +114,7 @@ def schedule_job(
     job_parameters = r.get_job_parameters()
     size = SizeSpec(
         x=job_parameters.pop("size"),
-        y=job_parameters.pop("y", None),
+        y=job_parameters.pop("size_y", None),
         units=job_parameters.pop("units", "px"),
     )
     generate_science = job_parameters.pop("generate_science", True)
