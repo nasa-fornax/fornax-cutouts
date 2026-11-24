@@ -1135,6 +1135,7 @@ def execute_cutout(
     """
     # Save task kwargs for logging, if needed
     task_kwargs = locals().copy()
+    task_kwargs.pop("self")
     metadata = metadata or {}
     is_async = batch_num > 0
     mission = _resolve_mission(source_file, mission)
