@@ -19,10 +19,6 @@ class MissionMetadata(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
-class SourceFileResolutionException(Exception):
-    """Exception raised when a source file cannot be resolved."""
-
-
 class AbstractMissionSource(ABC):
     metadata: MissionMetadata
 
