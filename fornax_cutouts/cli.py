@@ -118,12 +118,20 @@ def api(
     show_default=True,
     help="Celery log level.",
 )
+@click.option(
+    "--pool",
+    type=click.STRING,
+    default="prefork",
+    show_default=True,
+    help="Celery concurrency model (default: prefork).",
+)
 def worker(
     name: str | None,
     autoscale: str | None,
     concurrency: int | None,
     queues: str | None,
     log_level: str,
+    pool: str,
 ):
     """Start Celery worker."""
     from fornax_cutouts.app.celery_app import celery_app
@@ -142,6 +150,9 @@ def worker(
 
     if queues:
         args.append(f"--queues={queues}")
+
+    if pool:
+        args.append(f"--pool={pool}")
 
     celery_app.worker_main(args)
 

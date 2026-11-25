@@ -75,7 +75,11 @@ class AbstractMissionSource(ABC):
         return any(fnmatch(source_file, pattern) for pattern in self.source_file_patterns)
 
     def resolve_source_file(self, source_file: str) -> str:
-        """Return the path or URL the worker should open for ``source_file``."""
+        """Return the path or URL the worker should open for ``source_file``.
+
+        Implementations should raise a :class:`SourceFileResolutionException` if the file cannot be resolved and the
+        cutout cannot be completed.
+        """
         return source_file
 
     @abstractmethod

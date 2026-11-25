@@ -266,6 +266,8 @@ def resolve_source_file(self, source_file: str) -> str:
 
 For sync cutouts (where `mission` is not passed), set `source_file_patterns` or override `matches_source_file()` so the worker can infer the mission and invoke `resolve_source_file()`.
 
+When a source file cannot be resolved, `resolve_source_file` should raise a `SourceFileResolutionException` to skip the cutout for that file and report the error.
+
 ---
 
 ## Step 6: Verify Registration

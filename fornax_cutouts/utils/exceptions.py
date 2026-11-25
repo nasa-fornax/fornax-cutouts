@@ -39,3 +39,12 @@ class NoTasksRemainingInJobError(Exception):
     def __init__(self, job_id: str):
         self.job_id = job_id
         super().__init__(f"No cutout tasks remaining in {job_id}")
+
+
+class SourceFileResolutionException(Exception):
+    """Exception raised when a source file cannot be resolved."""
+
+    def __init__(self, source_file: str, message: str = ""):
+        self.source_file = source_file
+        self.message = message or f"Source file {source_file} could not be resolved"
+        super().__init__(self.message)
