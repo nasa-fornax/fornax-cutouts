@@ -70,8 +70,14 @@ Sync endpoints execute cutouts inline and return results immediately. Suitable f
 | `filename`        | `string` | Yes      | Source FITS file path or S3 URI.                        |
 | `ra`              | `float`  | Yes      | Right ascension in decimal degrees (0 to 360).          |
 | `dec`             | `float`  | Yes      | Declination in decimal degrees (−90 to 90).             |
-| `size`            | `int`    | Yes      | Cutout size in pixels.                                  |
+| `size`            | `float`  | Yes      | Cutout width in `units`.                               |
+| `size_y`          | `float`  | No       | Cutout height in `units`. Defaults to `size` (square). |
+| `units`           | `string` | No       | Units for `size` and `size_y`: `px` (default), `s` (arcsec), `m` (arcmin), `d` (deg). |
 | `include_preview` | `bool`   | No       | Also generate a JPEG preview alongside the FITS cutout. |
+
+`/sync/color` accepts the same `size`, `size_y`, and `units` parameters.
+
+If a mission can be inferred from a source file (see `source_file_patterns`), the requested size is converted to pixels using that mission's `pixel_size` and checked against its `max_cutout_size`. Requests that exceed it return `422`.
 
 For S3 storage backends, sync results are returned as presigned HTTPS URLs. The API signs any `s3://` paths returned by the worker. Expiration is `CUTOUTS__SYNC_TTL` seconds (default: 1 hour). When `CUTOUTS__STORAGE__RETURN_SIGNED_URLS` is `true`, workers may already return presigned URLs (see [Configuration](../configuration.md#storage-settings)).
 
@@ -118,13 +124,15 @@ Jobs are submitted as `multipart/form-data`. Mission-specific parameters are pas
 | Field      | Type       | Description                                                                         |
 | ---------- | ---------- | ----------------------------------------------------------------------------------- |
 | `position` | `string[]` | One or more sky positions as `"ra,dec"` decimal strings or resolvable object names. |
-| `size`     | `int`      | Cutout size in pixels.                                                              |
+| `size`     | `float`    | Cutout width in `units`.                                                           |
 
 **Optional fields:**
 
 | Field               | Type          | Description                                                                                   |
 | ------------------- | ------------- | --------------------------------------------------------------------------------------------- |
 | `output_format`     | `string[]`    | Output formats: `fits` (default), `jpeg`.                                                     |
+| `size_y`            | `float`       | Cutout height in `units`. Defaults to `size` (square).                                       |
+| `units`             | `string`      | Units for `size` and `size_y`: `px` (default), `s` (arcsec), `m` (arcmin), `d` (deg).              |
 | `RUNID`             | `string`      | Client-provided run identifier (max 64 chars).                                                |
 | `{mission}.{param}` | `string`      | Mission-specific parameter (e.g. `{mission}.filter=r`).                                       |
 | `{mission}`         | `JSON string` | All mission params as a JSON object (e.g. `{mission}={"filter":"r", "survey": "my_survey"}`). |

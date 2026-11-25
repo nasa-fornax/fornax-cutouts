@@ -102,7 +102,7 @@ class MyMissionSource(AbstractMissionSource):
 MissionMetadata(
     name="my_mission",  # must match the register_source() key
     pixel_size=0.5,  # arcseconds per pixel (used for coordinate math)
-    max_cutout_size=2000,  # requests larger than this are rejected with 422
+    max_cutout_size=2000,  # max cutout size in pixels, per axis
     filter=["g", "r", "i"],  # valid values for the filter parameter
     survey=["wide"],  # valid values for the survey parameter
 )
@@ -240,10 +240,10 @@ def get_filenames(
 
 ### Custom Validation
 
-Override `validate_request()` to add mission-specific validation beyond the built-in size and filter checks:
+Override `validate_request()` to add mission-specific validation beyond the built-in size and filter checks. `size` is an `(x, y)` tuple in pixels, already converted from angular units using `metadata.pixel_size`:
 
 ```python
-def validate_request(self, size: int, **extras) -> bool:
+def validate_request(self, size: tuple[int, int], **extras) -> bool:
     # Run the standard checks first
     is_valid = super().validate_request(size=size, **extras)
 

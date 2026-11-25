@@ -9,6 +9,7 @@ from fornax_cutouts.jobs.tasks import generate_color_preview, generate_cutout
 from fornax_cutouts.models.base import TargetPosition
 from fornax_cutouts.models.cutouts import FilenameLookupResponse
 from fornax_cutouts.sources import AbstractMissionSource, MissionMetadata, cutout_registry
+from fornax_cutouts.utils.units import SizeSpec
 
 CUTOUT_FILE_ASDF = "tests/data/sample_8.464454_-43.850641_100x100.asdf"
 CUTOUT_FILE_FITS = (
@@ -19,6 +20,7 @@ CUTOUT_FILE_FITS = (
 def make_fitscutout_mock(*_args, **_kwargs):
     mock_fits_cutout = mock.MagicMock()
     mock_fits_cutout.write_as_fits = mock.MagicMock(return_value=["mocked_fits_file.fits"])
+    mock_fits_cutout.fits_cutouts = [{"CUTOUT": mock.MagicMock(**{"data.shape": (100, 100)})}]
     return mock_fits_cutout
 
 
@@ -30,7 +32,7 @@ def test_generate_cutout_fits():
     response = generate_cutout(
         source_file=CUTOUT_FILE_FITS,
         target=TargetPosition(ra=0.0, dec=0.0),
-        size=(100, 100),
+        size=SizeSpec(x=100),
         output_dir="testdir",
     )
     assert response.science == "mocked_fits_file.fits"
@@ -45,7 +47,7 @@ def test_generate_cutout_infers_mission(_infer_mission):
     response = generate_cutout(
         source_file=CUTOUT_FILE_FITS,
         target=TargetPosition(ra=0.0, dec=0.0),
-        size=(100, 100),
+        size=SizeSpec(x=100),
         output_dir="testdir",
         mission="sync",
     )
@@ -59,7 +61,7 @@ def test_generate_cutout_asdf(tmp_path):
     response = generate_cutout(
         source_file=CUTOUT_FILE_ASDF,
         target=TargetPosition(ra=cutout_ra, dec=cutout_dec),
-        size=(10, 10),
+        size=SizeSpec(x=10),
         output_dir=str(tmp_path),
         metadata={"filter": "F146"},
     )
@@ -81,7 +83,7 @@ def test_generate_preview_asdf(tmp_path):
     response = generate_cutout(
         source_file=CUTOUT_FILE_ASDF,
         target=TargetPosition(ra=cutout_ra, dec=cutout_dec),
-        size=(10, 10),
+        size=SizeSpec(x=10),
         output_dir=str(tmp_path),
         generate_preview=True,
         generate_science=False,
@@ -102,7 +104,7 @@ def test_cutout_fits_gz(tmp_path):
     response = generate_cutout(
         source_file="tests/data/rings.v3.skycell.2627.066.stk.g.unconv_shrink.fits.gz",
         target=TargetPosition(ra=cutout_ra, dec=cutout_dec),
-        size=(100, 100),
+        size=SizeSpec(x=100),
         output_dir=str(tmp_path),
     )
     cutout_stem = "rings.v3.skycell.2627.066.stk.g.unconv_shrink"
@@ -114,11 +116,21 @@ def test_cutout_fits_gz(tmp_path):
     assert response.preview is None
 
 
+def test_cutout_fits_angular_size_uses_file_wcs(tmp_path):
+    response = generate_cutout(
+        source_file="tests/data/rings.v3.skycell.2627.066.stk.g.unconv_shrink.fits.gz",
+        target=TargetPosition(ra=188.27856215089, dec=82.56394517878),
+        size=SizeSpec(x=5, y=2.5, units="s"),
+        output_dir=str(tmp_path),
+    )
+    assert response.size_px == (20, 10)
+
+
 def test_generate_color_preview(tmp_path):
     """Test that we can generate a color preview from a FITS file"""
     cutout_ra = 188.27856215089
     cutout_dec = 82.56394517878
-    cutout_size = (10, 10)
+    cutout_size = SizeSpec(x=10)
     target = TargetPosition(ra=cutout_ra, dec=cutout_dec)
     cutout_files = [
         "tests/data/rings.v3.skycell.2627.066.stk.i.unconv_shrink.fits",
@@ -168,7 +180,7 @@ def test_generate_cutout_resolves_source_file(tmp_path, monkeypatch, mission):
     response = generate_cutout(
         source_file="virtual.asdf",
         target=TargetPosition(ra=8.46340835, dec=-43.8514),
-        size=(10, 10),
+        size=SizeSpec(x=10),
         output_dir=str(tmp_path),
         mission=mission,
     )
