@@ -94,6 +94,9 @@ extend-select = ["C", "I", "FAST", "RUF", "BLE"]
 [tool.ruff.lint.isort]
 split-on-trailing-comma = false
 
+[tool.ruff.lint.mccabe]
+max-complexity = 15
+
 [tool.ruff.format]
 indent-style = "space"
 line-ending = "auto"

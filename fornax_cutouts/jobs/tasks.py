@@ -441,7 +441,7 @@ def batch_watchdog(self: Task, job_id: str, batch_num: int, expected_count: int)
     bind=True,
     queue="high_mem",
 )
-def write_results(self: Task, job_id: str, batch_num: int):  # noqa: C901
+def write_results(self: Task, job_id: str, batch_num: int):
     """
     Batch result writer: collects completed cutout results and writes them to AsyncCutoutResults.
     Checks if the job is complete, and if not, schedules the next batch
@@ -787,7 +787,7 @@ def get_cutout_stem(cutout_file: str, extensions: Sequence[str]) -> str:
     return cutout_file
 
 
-def generate_cutout(  # noqa: C901
+def generate_cutout(
     source_file: str,
     target: TargetPosition,
     size: SizeSpec,
@@ -1140,6 +1140,7 @@ def execute_cutout(
     # Save task kwargs for logging, if needed
     task_kwargs = locals().copy()
     task_kwargs.pop("self")
+    task_kwargs["size"] = size.model_dump()
     metadata = metadata or {}
     is_async = batch_num > 0
     mission = _resolve_mission(source_file, mission)
@@ -1168,6 +1169,8 @@ def execute_cutout(
         "is_async": is_async,
     }
 
+    cutout_kwargs_dumped = cutout_kwargs.copy()
+    cutout_kwargs_dumped["size"] = size.model_dump()
     try:
         resp = generate_cutout(**cutout_kwargs)
 
@@ -1177,7 +1180,7 @@ def execute_cutout(
 
         logger.info(
             f"Job {job_id} cutout skipped (cutout has no data): mission='{mission}' source='{source_file}'",
-            extra={"event": "cutout_skipped"} | cutout_kwargs,
+            extra={"event": "cutout_skipped"} | cutout_kwargs_dumped,
         )
     except SourceFileResolutionException as e:
         if is_async:
@@ -1190,9 +1193,9 @@ def execute_cutout(
 
         logger.info(
             f"Job {job_id} cutout failed (source file could not be resolved): mission='{mission}' source='{source_file}'",
-            extra={"event": "cutout_failed"} | cutout_kwargs,
+            extra={"event": "cutout_failed"} | cutout_kwargs_dumped,
         )
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001, record any failure
         if is_async:
             remaining = r.fail_task(
                 batch_num=batch_num,
@@ -1203,7 +1206,7 @@ def execute_cutout(
 
         logger.warning(
             f"Job {job_id} cutout failed: {e!r}",
-            extra={"event": "cutout_failed"} | cutout_kwargs,
+            extra={"event": "cutout_failed"} | cutout_kwargs_dumped,
             exc_info=True,
         )
 
