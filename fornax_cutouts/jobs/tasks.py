@@ -1186,7 +1186,7 @@ def execute_cutout(
 
         logger.info(
             f"Job {job_id} cutout failed (source file could not be resolved): mission='{mission}' source='{source_file}'",
-            extra={"event": "cutout_skipped"} | cutout_kwargs,
+            extra={"event": "cutout_failed"} | cutout_kwargs,
         )
     except Exception as e:
         if is_async:
